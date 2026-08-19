@@ -1,0 +1,198 @@
+// HRMS Prisma schema
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (NextAuth v5) models — standard adapter schema.
+// See https://authjs.dev/getting-started/adapters/prisma if you change this.
+// ---------------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// HRMS core models
+// ---------------------------------------------------------------------------
+
+/// Application role. Assigned by an HR Admin; drives RBAC (PRD §4, §30).
+enum Role {
+  HR_ADMIN
+  HR_EXECUTIVE
+  MANAGER
+  EMPLOYEE
+  MANAGEMENT
+}
+
+/// A login identity (created on first Microsoft Entra ID sign-in).
+/// Linked to at most one Employee record, matched by email.
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(EMPLOYEE)
+
+  accounts Account[]
+  sessions Session[]
+
+  employee Employee?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum EmploymentStatus {
+  CANDIDATE
+  OFFER_ACCEPTED
+  PRE_BOARDING
+  ONBOARDING
+  PROBATION
+  CONFIRMED
+  ACTIVE
+  NOTICE_PERIOD
+  EXITED
+  ALUMNI
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum WorkMode {
+  ON_SITE
+  REMOTE
+  HYBRID
+}
+
+/// Single source of truth for employee data (PRD §7).
+model Employee {
+  id             String  @id @default(cuid())
+  employeeCode   String  @unique // human-readable Employee ID, e.g. EMP-0001
+
+  // Optional link to a login identity — set once the person signs in via SSO.
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  // --- Personal information ---
+  fullName         String
+  preferredName    String?
+  dateOfBirth      DateTime?
+  gender           String?
+  personalEmail    String?
+  personalPhone    String?
+  currentAddress   String?
+  permanentAddress String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+
+  // --- Employment information ---
+  dateOfJoining     DateTime
+  department        String
+  designation       String
+  location          String?
+  employmentType    EmploymentType   @default(FULL_TIME)
+  workMode          WorkMode         @default(ON_SITE)
+  reportingManagerId String?
+  reportingManager   Employee?       @relation("ManagerReports", fields: [reportingManagerId], references: [id])
+  directReports      Employee[]      @relation("ManagerReports")
+
+  probationEndDate  DateTime?
+  confirmationDate  DateTime?
+  noticePeriodDays  Int?
+  resignationDate   DateTime?
+  lastWorkingDay    DateTime?
+
+  status            EmploymentStatus @default(PRE_BOARDING)
+  statusHistory     EmployeeStatusHistory[]
+
+  // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
+  ctcAnnual         Decimal?  @db.Decimal(14, 2)
+
+  // --- Bank / statutory (restricted) ---
+  panNumber         String?
+  aadhaarNumber     String?
+  uan               String?
+  bankAccountNumber String?
+  bankIfsc          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([department])
+  @@index([status])
+  @@index([reportingManagerId])
+}
+
+/// Every lifecycle status change, with who/when/why (PRD §8, §31).
+model EmployeeStatusHistory {
+  id            String            @id @default(cuid())
+  employeeId    String
+  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  previousStatus EmploymentStatus?
+  newStatus     EmploymentStatus
+  reason        String?
+  changedById   String? // User.id of the HR user who made the change
+  changedAt     DateTime          @default(now())
+
+  @@index([employeeId])
+}
+
+/// Generic audit trail for sensitive field changes (PRD §31).
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String   // e.g. "Employee"
+  entityId   String
+  field      String
+  oldValue   String?
+  newValue   String?
+  reason     String?
+  changedById String?
+  changedAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
