@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-const HR_ROLES = ["HR_ADMIN", "HR_EXECUTIVE", "MANAGEMENT"] as const;
+import { HR_VIEW_ROLES } from "@/lib/rbac";
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -16,12 +16,19 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 export default async function DashboardPage() {
   const session = await auth();
-  const role = session!.user.role;
+  if (!session?.user) {
+    // dashboard/layout.tsx already checked this, but session-strategy
+    // sessions are re-fetched from the DB on every auth() call (not cached
+    // between the layout and this page render), so re-check here rather
+    // than asserting non-null.
+    redirect("/sign-in");
+  }
+  const role = session.user.role;
 
-  if (!HR_ROLES.includes(role as (typeof HR_ROLES)[number])) {
+  if (!HR_VIEW_ROLES.includes(role)) {
     return (
       <div>
-        <h1 className="text-xl font-semibold">Welcome, {session!.user.name}</h1>
+        <h1 className="text-xl font-semibold">Welcome, {session.user.name}</h1>
         <p className="mt-2 text-sm text-black/60 dark:text-white/60">
           Employee and manager self-service views (leave, attendance,
           documents, requests) land in a later phase — see the MVP roadmap.
@@ -30,14 +37,19 @@ export default async function DashboardPage() {
     );
   }
 
-  const thirtyDaysAgo = new Date();
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const [total, active, newJoiners, onProbation, onNotice, pendingOnboarding] =
     await Promise.all([
       prisma.employee.count(),
       prisma.employee.count({ where: { status: "ACTIVE" } }),
-      prisma.employee.count({ where: { dateOfJoining: { gte: thirtyDaysAgo } } }),
+      prisma.employee.count({
+        // Upper-bounded so pre-boarding employees with a future joining
+        // date (a normal state per PRD §8) aren't counted as "new" yet.
+        where: { dateOfJoining: { gte: thirtyDaysAgo, lte: now } },
+      }),
       prisma.employee.count({ where: { status: "PROBATION" } }),
       prisma.employee.count({ where: { status: "NOTICE_PERIOD" } }),
       prisma.employee.count({

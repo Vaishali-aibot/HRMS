@@ -183,6 +183,10 @@ model EmployeeStatusHistory {
 }
 
 /// Generic audit trail for sensitive field changes (PRD §31).
+/// NOTE: no code path writes to this table yet — there is no edit/update
+/// mutation in the codebase yet for it to log. Wire this up when the first
+/// "edit employee" / compensation-change action is built; see README.md
+/// "Known items to revisit".
 model AuditLog {
   id         String   @id @default(cuid())
   entityType String   // e.g. "Employee"
@@ -195,4 +199,13 @@ model AuditLog {
   changedAt  DateTime @default(now())
 
   @@index([entityType, entityId])
+}
+
+/// Atomic counters for generating human-readable sequential codes (e.g.
+/// employeeCode). A row-level UPDATE inside a transaction is atomic under
+/// Postgres's read-committed default, avoiding the count()+1 race a plain
+/// SELECT COUNT(*) would have.
+model Counter {
+  name  String @id
+  value Int    @default(0)
 }

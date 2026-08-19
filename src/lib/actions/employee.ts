@@ -1,10 +1,11 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { HR_WRITE_ROLES, requireRole } from "@/lib/rbac";
 
 const createEmployeeSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
@@ -15,28 +16,31 @@ const createEmployeeSchema = z.object({
   location: z.string().optional().or(z.literal("")),
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERN"]),
   workMode: z.enum(["ON_SITE", "REMOTE", "HYBRID"]),
+  // This is Employee.id (an internal cuid), populated from a <select> of
+  // existing employees in the form — never free text. See
+  // src/app/dashboard/employees/new/employee-form.tsx.
   reportingManagerId: z.string().optional().or(z.literal("")),
 });
 
 export type CreateEmployeeState = {
-  ok: boolean;
   error?: string;
 };
 
-/**
- * Generates the next human-readable employee code (EMP-0001, EMP-0002, ...).
- * Good enough for MVP volumes; move to a DB sequence if joiner volume grows.
- */
-async function nextEmployeeCode() {
-  const count = await prisma.employee.count();
-  return `EMP-${String(count + 1).padStart(4, "0")}`;
-}
+const GENERIC_ERROR =
+  "Something went wrong while creating the employee. Please try again.";
 
 export async function createEmployee(
   _prevState: CreateEmployeeState,
   formData: FormData
 ): Promise<CreateEmployeeState> {
-  const session = await requireRole("HR_ADMIN", "HR_EXECUTIVE");
+  let session;
+  try {
+    session = await requireRole(...HR_WRITE_ROLES);
+  } catch {
+    // Don't leak internal role names to whoever/whatever called this —
+    // requireRole's message is for logs/dev, not the client.
+    return { error: "You do not have permission to perform this action." };
+  }
 
   const parsed = createEmployeeSchema.safeParse({
     fullName: formData.get("fullName"),
@@ -51,38 +55,69 @@ export async function createEmployee(
   });
 
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
   const data = parsed.data;
-  const employeeCode = await nextEmployeeCode();
+  const reportingManagerId = data.reportingManagerId || undefined;
 
-  const employee = await prisma.employee.create({
-    data: {
-      employeeCode,
-      fullName: data.fullName,
-      personalEmail: data.personalEmail || undefined,
-      dateOfJoining: new Date(data.dateOfJoining),
-      department: data.department,
-      designation: data.designation,
-      location: data.location || undefined,
-      employmentType: data.employmentType,
-      workMode: data.workMode,
-      reportingManagerId: data.reportingManagerId || undefined,
-      status: "PRE_BOARDING",
-    },
-  });
+  try {
+    if (reportingManagerId) {
+      // Defense in depth: the form only ever submits a real Employee.id via
+      // a <select>, but a direct POST could send anything — validate here
+      // rather than let it surface as an uncaught FK constraint violation.
+      const managerExists = await prisma.employee.findUnique({
+        where: { id: reportingManagerId },
+        select: { id: true },
+      });
+      if (!managerExists) {
+        return { error: "Selected reporting manager no longer exists." };
+      }
+    }
 
-  await prisma.employeeStatusHistory.create({
-    data: {
-      employeeId: employee.id,
-      previousStatus: null,
-      newStatus: "PRE_BOARDING",
-      reason: "Employee record created",
-      changedById: session.user.id,
-    },
-  });
+    await prisma.$transaction(async (tx) => {
+      // Atomic counter increment (not count()+1) so two concurrent creates
+      // can never compute the same employeeCode.
+      const counter = await tx.counter.upsert({
+        where: { name: "employeeCode" },
+        update: { value: { increment: 1 } },
+        create: { name: "employeeCode", value: 1 },
+      });
+      const employeeCode = `EMP-${String(counter.value).padStart(4, "0")}`;
+
+      const employee = await tx.employee.create({
+        data: {
+          employeeCode,
+          fullName: data.fullName,
+          personalEmail: data.personalEmail || undefined,
+          dateOfJoining: new Date(data.dateOfJoining),
+          department: data.department,
+          designation: data.designation,
+          location: data.location || undefined,
+          employmentType: data.employmentType,
+          workMode: data.workMode,
+          reportingManagerId,
+          status: "PRE_BOARDING",
+        },
+      });
+
+      // Same transaction as the employee insert — never leave an Employee
+      // row with no corresponding lifecycle-history row.
+      await tx.employeeStatusHistory.create({
+        data: {
+          employeeId: employee.id,
+          previousStatus: null,
+          newStatus: "PRE_BOARDING",
+          reason: "Employee record created",
+          changedById: session.user.id,
+        },
+      });
+    });
+  } catch (err) {
+    console.error("createEmployee failed:", err);
+    return { error: GENERIC_ERROR };
+  }
 
   revalidatePath("/dashboard/employees");
-  return { ok: true };
+  redirect("/dashboard/employees");
 }

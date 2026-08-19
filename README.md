@@ -19,12 +19,15 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
 - Prisma schema: Auth.js tables + **Employee Master** (PRD §7) + **lifecycle
   status history** (PRD §8) + a generic **audit log** table (PRD §31)
 - Auth: Microsoft Entra ID SSO via Auth.js v5, database-backed sessions
-- RBAC skeleton: `Role` enum (`HR_ADMIN`, `HR_EXECUTIVE`, `MANAGER`,
-  `EMPLOYEE`, `MANAGEMENT`), `requireRole()` guard used in every mutation,
+- RBAC: `Role` enum (`HR_ADMIN`, `HR_EXECUTIVE`, `MANAGER`, `EMPLOYEE`,
+  `MANAGEMENT`); `requireRole()`/`requireSession()` guard every Server Action,
+  `requireRoleForPage()` gates HR-only pages (redirects rather than crashing),
   route protection in `src/proxy.ts`
-- Pages: sign-in, HR dashboard (headcount/probation/notice-period counts),
-  employee list, add-employee form (writes to Employee Master + status
-  history in one transaction path)
+- Pages: sign-in (open-redirect-safe `callbackUrl` handling), HR dashboard
+  (headcount/probation/notice-period counts, HR/management-only), employee
+  list (HR/management-only), add-employee form (employee + lifecycle-history
+  write in one atomic transaction, race-free sequential employee codes,
+  reporting-manager picked from a real employee list rather than free text)
 
 Everything else in the PRD (onboarding workflow, documents, attendance,
 leave, performance, recognition, exits, reports, etc.) is **not built yet**
@@ -45,8 +48,9 @@ src/
   lib/
     auth.ts                       Auth.js config (Entra ID provider, RBAC session)
     prisma.ts                     Prisma Client singleton (driver adapter)
-    rbac.ts                       requireRole()/requireSession() guards
-    actions/employee.ts           Server Action: create employee
+    rbac.ts                       requireRole()/requireRoleForPage()/requireSession() guards
+    safe-redirect.ts              Open-redirect guard for callbackUrl-style params
+    actions/employee.ts           Server Action: create employee (transactional)
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -181,6 +185,12 @@ git push -u origin main
 - Compensation/bank/statutory fields (PRD §7) exist in the schema but have
   no UI yet — deliberately, since they need tighter field-level RBAC than
   this scaffold implements. Build that as its own module (see roadmap).
+- `AuditLog` (PRD §31) exists as a table only — nothing writes to it yet,
+  since there's no edit/update mutation for it to log. Wire it up when the
+  first "edit employee" action is built.
+- The `Counter` model (used for atomic, race-free `employeeCode` generation)
+  was added after the initial scaffold. If you already ran a migration
+  before pulling this change, run `npm run db:migrate` again to pick it up.
 
 ## Roadmap: remaining PRD modules
 

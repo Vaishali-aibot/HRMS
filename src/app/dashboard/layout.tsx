@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth, signOut } from "@/lib/auth";
-import { ROLE_LABELS } from "@/lib/rbac";
+import { HR_VIEW_ROLES, ROLE_LABELS } from "@/lib/rbac";
 
 export default async function DashboardLayout({
   children,
@@ -14,6 +14,8 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
+  const canViewRoster = HR_VIEW_ROLES.includes(session.user.role);
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b border-black/10 px-6 py-3 dark:border-white/15">
@@ -21,7 +23,10 @@ export default async function DashboardLayout({
           <span className="font-semibold">HRMS</span>
           <nav className="flex gap-4 text-sm text-black/70 dark:text-white/70">
             <Link href="/dashboard">Dashboard</Link>
-            <Link href="/dashboard/employees">Employees</Link>
+            {/* Employees list is HR/management-only (also enforced with a
+                redirect inside the page itself) — don't link non-HR users
+                into a dead end. */}
+            {canViewRoster && <Link href="/dashboard/employees">Employees</Link>}
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm">

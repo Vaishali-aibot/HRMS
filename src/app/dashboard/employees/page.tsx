@@ -1,8 +1,14 @@
 import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
+import { HR_VIEW_ROLES, requireRoleForPage } from "@/lib/rbac";
 
 export default async function EmployeesPage() {
+  // Full roster is HR/management-only (PRD §30) — redirects non-HR roles
+  // rather than letting them view every employee's status/department/join
+  // date, which the proxy alone does not prevent.
+  await requireRoleForPage(...HR_VIEW_ROLES);
+
   const employees = await prisma.employee.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -53,7 +59,11 @@ export default async function EmployeesPage() {
                   </span>
                 </td>
                 <td className="px-4 py-2">
-                  {e.dateOfJoining.toLocaleDateString()}
+                  {/* dateOfJoining is stored as UTC midnight of the entered
+                      calendar date (an <input type="date"> value parsed by
+                      `new Date()`) — format in UTC too, or a server running
+                      in a timezone behind UTC would display one day early. */}
+                  {e.dateOfJoining.toLocaleDateString(undefined, { timeZone: "UTC" })}
                 </td>
               </tr>
             ))}

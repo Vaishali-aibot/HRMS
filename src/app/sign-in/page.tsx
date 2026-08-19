@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { auth, signIn } from "@/lib/auth";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export default async function SignInPage({
   searchParams,
@@ -9,9 +10,12 @@ export default async function SignInPage({
 }) {
   const session = await auth();
   const { callbackUrl } = await searchParams;
+  // Never trust callbackUrl as-is — it's an attacker-controllable query
+  // param, and an unvalidated value here is an open redirect (CWE-601).
+  const destination = safeRedirectPath(callbackUrl, "/dashboard");
 
   if (session?.user) {
-    redirect(callbackUrl ?? "/dashboard");
+    redirect(destination);
   }
 
   return (
@@ -26,7 +30,7 @@ export default async function SignInPage({
           action={async () => {
             "use server";
             await signIn("microsoft-entra-id", {
-              redirectTo: callbackUrl ?? "/dashboard",
+              redirectTo: destination,
             });
           }}
         >
