@@ -64,12 +64,17 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   existing status-change form) auto-records `confirmationDate` the first
   time; the reminders cron flags anyone hitting the 30/15/7-day mark today
   — Vercel's Hobby plan runs cron at most once/day, so exact-day matching
-  is what makes this fire once per milestone instead of daily)
+  is what makes this fire once per milestone instead of daily), **WFH
+  requests** (PRD §15 — apply → manager-or-HR approve/reject, same
+  authorization shape as leave/corrections; an approval writes
+  `WORK_FROM_HOME` directly onto every covered `AttendanceRecord` date +
+  `AuditLog` entries, so it shows up on the attendance views immediately
+  rather than needing a separate sync step)
 
-Not yet built: WFH as its own request workflow (folded into attendance's
-`WORK_FROM_HOME` status instead), performance, recognition, exits, reports,
-etc. — see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested
-build order.
+Not yet built: WFH eligibility/max-days/location-restriction policy (PRD
+§15 configuration — the request/approve mechanics exist, the policy engine
+doesn't), performance, recognition, exits, reports, etc. — see
+[Roadmap](#roadmap-remaining-prd-modules) below for a suggested build order.
 
 ## Project structure
 
@@ -85,6 +90,7 @@ src/
                                    onboarding document/IT checklist rows (+ upload)
     dashboard/onboarding/page.tsx Onboarding progress overview (PRD §6/§10/§11)
     dashboard/documents/page.tsx  Self-service: upload my own onboarding documents
+    dashboard/wfh/                Work From Home: apply, approve/reject (PRD §15)
     dashboard/leave/              Leave: balances, apply form, approve/reject (PRD §14)
     dashboard/leave-types/        HR-only: add/edit leave types, carry-forward limits
     dashboard/attendance/         Attendance: HR/manager marking, self-check-in,
@@ -125,6 +131,8 @@ src/
                                    reports), self-check-in for today (+ AuditLog)
     actions/attendance-correction.ts  Server Actions: request/approve/reject/cancel
                                        an attendance correction (+ AuditLog on approval)
+    actions/wfh.ts                Server Actions: request/approve/reject/cancel a WFH
+                                   request (approval writes AttendanceRecord + AuditLog)
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -406,6 +414,14 @@ git push -u origin main
   feature landed have `probationEndDate = null` until someone extends
   probation or edits the record — the reminders job simply won't flag
   them (no crash, no false positive, just silent until set).
+- **WFH has no policy enforcement** (eligibility, max days, location
+  restrictions — all PRD §15) — any employee can request any date range up
+  to 31 days, and any manager/HR can approve it. Approving one is an
+  *authoritative* override: it overwrites whatever `AttendanceRecord`
+  already existed for every covered date (same as an approved attendance
+  correction), so approving a WFH request that overlaps a day HR already
+  marked ABSENT, for instance, silently replaces that with
+  WORK_FROM_HOME — there's no conflict warning shown to the approver yet.
 
 ## Roadmap: remaining PRD modules
 
@@ -416,8 +432,9 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 1. Leave accrual/encashment (PRD §14) — carry-forward and type management
    now exist; accrual (earn-over-time rather than a lump sum on Jan 1) and
    encashment (cash out unused days) don't.
-2. WFH as its own request workflow (PRD §15) — currently just an attendance
-   status value, no separate request/approval flow.
+2. WFH policy (PRD §15) — eligibility, max-days limits, location
+   restrictions. The request/approve/reflect-in-attendance mechanics exist
+   (`/dashboard/wfh`); nothing enforces a policy on top of them yet.
 3. Exit/separation workflow (§24–§26): resignation → checklist → asset
    return → clearance.
 4. HR Helpdesk (§21): request categories, SLA dashboard.
