@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES, requireSession } from "@/lib/rbac";
+import { todayUTC } from "@/lib/date-only";
 
 export type CorrectionActionState = { error?: string };
 
@@ -18,11 +19,6 @@ const ATTENDANCE_STATUSES = [
   "ON_LEAVE",
   "MISSING",
 ] as const;
-
-function todayUTC() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
 
 const requestSchema = z.object({
   date: z.string().min(1, "Date is required"),

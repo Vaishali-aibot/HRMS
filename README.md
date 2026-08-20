@@ -39,12 +39,14 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   **leave** (PRD §14 — 3 default leave types seeded automatically, one
   balance per employee per year created lazily, apply → manager-or-HR
   approve/reject → balance deducted on approval with a re-check to prevent
-  overdrawing), **attendance** (PRD §13 — HR marks daily status per
-  employee, with an `AuditLog` entry on every override; everyone gets a
-  personal dashboard summary of their own record; employees can submit
-  **correction requests** for a past date → their manager or HR
-  approves/rejects → an approval applies the correction and audit-logs it,
-  same as a direct HR override), **document upload** (PRD §10 — employees
+  overdrawing), **attendance** (PRD §13 — HR marks anyone's status directly;
+  a manager can mark their own direct reports' (checked in the action, not
+  just implied by the UI); everyone gets same-day self-check-in for their
+  own record plus a monthly summary; every override/self-mark writes an
+  `AuditLog` entry; employees can also submit **correction requests** for a
+  *past* date → their manager or HR approves/rejects → an approval applies
+  the correction and audit-logs it, same as a direct override), **document
+  upload** (PRD §10 — employees
   upload their own onboarding documents to Vercel Blob as **private**
   objects — PAN/Aadhaar/bank proof are never a public URL — served back
   only through an authenticated route to the document's own employee or
@@ -56,12 +58,10 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   failing if email isn't configured yet)
 
 Not yet built: WFH as its own request workflow (folded into attendance's
-`WORK_FROM_HOME` status instead), self-service/manager attendance
-*marking* (only correction *requests* exist — direct marking stays
-HR-only), performance, recognition, exits, reports, probation-end
-reminders (needs probation automation first — see roadmap), etc. — see
-[Roadmap](#roadmap-remaining-prd-modules) below for a suggested build
-order.
+`WORK_FROM_HOME` status instead), performance, recognition, exits, reports,
+probation-end reminders (needs probation automation first — see roadmap),
+etc. — see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested
+build order.
 
 ## Project structure
 
@@ -78,8 +78,8 @@ src/
     dashboard/onboarding/page.tsx Onboarding progress overview (PRD §6/§10/§11)
     dashboard/documents/page.tsx  Self-service: upload my own onboarding documents
     dashboard/leave/              Leave: balances, apply form, approve/reject (PRD §14)
-    dashboard/attendance/         Attendance: HR marks status, personal summary,
-                                   correction requests (PRD §13)
+    dashboard/attendance/         Attendance: HR/manager marking, self-check-in,
+                                   personal summary, correction requests (PRD §13)
     dashboard/users/              HR_ADMIN-only role assignment + employee linking
     api/auth/[...nextauth]/       Auth.js route handler
     api/documents/[documentId]/   Authenticated file download/streaming proxy —
@@ -97,6 +97,7 @@ src/
                                    "use client" files (rbac.ts is not — see comment)
     safe-redirect.ts              Open-redirect guard for callbackUrl-style params
     leave-balance.ts              ensureLeaveBalance() — lazy per-year balance creation
+    date-only.ts                  Shared UTC-midnight date helpers (todayUTC(), etc.)
     document-upload.ts            Shared upload constraints (size/type) — client + server
     email.ts                      sendEmail() — Resend, logs instead of throwing if unconfigured
     reminders.ts                  Reminder queries + emails, called by the cron route
@@ -109,7 +110,8 @@ src/
     actions/user-role.ts          Server Actions: change a user's role (+ AuditLog),
                                    link/unlink a user to an employee record
     actions/leave.ts              Server Actions: apply/approve/reject/cancel leave
-    actions/attendance.ts         Server Action: mark attendance (HR-only, + AuditLog)
+    actions/attendance.ts         Server Actions: mark attendance (HR any / manager own
+                                   reports), self-check-in for today (+ AuditLog)
     actions/attendance-correction.ts  Server Actions: request/approve/reject/cancel
                                        an attendance correction (+ AuditLog on approval)
   proxy.ts                        Route protection (Next 16's renamed "middleware")
@@ -362,10 +364,14 @@ git push -u origin main
   `applyForLeave`'s balance check is a courtesy, not a reservation (two
   pending requests can both pass it) — `decideLeaveRequest` re-checks
   atomically before deducting, which is what actually prevents overdrawing.
-- **Attendance marking is still HR-only** — employees/managers can *request*
-  a correction (approved into an actual record change + audit log), but
-  can't mark attendance directly themselves. No external attendance-device
-  integration either (PRD §32 frames that as a separate integration).
+- **Self-check-in is same-day only** — an employee can mark PRESENT/
+  WORK_FROM_HOME/HALF_DAY for *today*, and only if HR/their manager hasn't
+  already set today's record (checked by comparing `markedById`, not just
+  hidden in the UI). Anything else — a past date, ABSENT/LATE/ON_LEAVE,
+  overriding an existing HR-set record — goes through
+  `requestAttendanceCorrection` instead, deliberately. No external
+  attendance-device integration either (PRD §32 frames that as a separate
+  integration).
 - A correction request snapshots `currentStatus` at submission time but
   `decideAttendanceCorrection` audit-logs the *actual* status at decision
   time (fetched fresh, not the snapshot) — correct, but means the two can
@@ -394,15 +400,13 @@ Suggested build order, grouped roughly by the PRD's own priority framework
    there and a way to actually *set* `probationEndDate` (nothing does
    today), then flip status via the existing `changeEmployeeStatus` action
    at 30/15/7 days out.
-2. Manager/self-service *direct* attendance marking — today only HR can
-   mark directly; everyone else goes through a correction request.
-3. Leave type management UI (HR can currently only use the 3 seeded
+2. Leave type management UI (HR can currently only use the 3 seeded
    defaults) and carry-forward/accrual (PRD §14).
-4. WFH as its own request workflow (PRD §15) — currently just an attendance
+3. WFH as its own request workflow (PRD §15) — currently just an attendance
    status value, no separate request/approval flow.
-5. Exit/separation workflow (§24–§26): resignation → checklist → asset
+4. Exit/separation workflow (§24–§26): resignation → checklist → asset
    return → clearance.
-6. HR Helpdesk (§21): request categories, SLA dashboard.
+5. HR Helpdesk (§21): request categories, SLA dashboard.
 
 **Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
 asset management (§26), integrations (§32) — Outlook/Teams notifications,
