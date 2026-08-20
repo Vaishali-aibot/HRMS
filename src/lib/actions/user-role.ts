@@ -79,3 +79,67 @@ export async function changeUserRole(
   revalidatePath("/dashboard/users");
   redirect("/dashboard/users");
 }
+
+const linkEmployeeSchema = z.object({
+  userId: z.string().min(1),
+  // Empty string means "unlink".
+  employeeId: z.string().optional().or(z.literal("")),
+});
+
+export type LinkEmployeeState = { error?: string };
+
+/**
+ * Links (or unlinks) a User to an Employee record. This is what lets
+ * self-service features (leave, attendance) resolve "which employee is the
+ * signed-in person" — Employee.userId is otherwise never set by anything.
+ */
+export async function linkUserToEmployee(
+  _prevState: LinkEmployeeState,
+  formData: FormData
+): Promise<LinkEmployeeState> {
+  try {
+    await requireRole("HR_ADMIN");
+  } catch {
+    return { error: "You do not have permission to perform this action." };
+  }
+
+  const parsed = linkEmployeeSchema.safeParse({
+    userId: formData.get("userId"),
+    employeeId: formData.get("employeeId"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { userId } = parsed.data;
+  const employeeId = parsed.data.employeeId || undefined;
+
+  try {
+    if (employeeId) {
+      const employee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { userId: true },
+      });
+      if (!employee) {
+        return { error: "Employee not found." };
+      }
+      if (employee.userId && employee.userId !== userId) {
+        return { error: "That employee is already linked to a different user." };
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Clear whatever this user was linked to before (idempotent, and
+      // handles "switch to a different employee" and "unlink" in one go).
+      await tx.employee.updateMany({ where: { userId }, data: { userId: null } });
+      if (employeeId) {
+        await tx.employee.update({ where: { id: employeeId }, data: { userId } });
+      }
+    });
+  } catch (err) {
+    console.error("linkUserToEmployee failed:", err);
+    return { error: "Something went wrong while updating the link. Please try again." };
+  }
+
+  revalidatePath("/dashboard/users");
+  redirect("/dashboard/users");
+}

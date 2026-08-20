@@ -35,13 +35,19 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   onboarding checklists (PRD §10–§11 — one document-status row and one IT
   setup-task row per employee, created automatically the moment the
   employee record exists; a dedicated `/dashboard/onboarding` view lists
-  everyone currently pre-boarding/onboarding with checklist progress)
+  everyone currently pre-boarding/onboarding with checklist progress),
+  **leave** (PRD §14 — 3 default leave types seeded automatically, one
+  balance per employee per year created lazily, apply → manager-or-HR
+  approve/reject → balance deducted on approval with a re-check to prevent
+  overdrawing), **attendance** (PRD §13 — HR marks daily status per
+  employee; everyone gets a personal dashboard summary of their own record)
 
 Not yet built: actual document **upload/storage** (the document checklist
-tracks status only, no file attached yet — see Known items), attendance,
-leave, performance, recognition, exits, reports, automated reminders, etc.
-— see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested build
-order.
+tracks status only, no file attached yet — see Known items), WFH as its own
+request workflow (folded into attendance's `WORK_FROM_HOME` status instead),
+attendance correction requests, performance, recognition, exits, reports,
+automated reminders, etc. — see
+[Roadmap](#roadmap-remaining-prd-modules) below for a suggested build order.
 
 ## Project structure
 
@@ -56,7 +62,9 @@ src/
     dashboard/employees/[id]/     Employee detail/edit page, status-change form,
                                    onboarding document/IT checklist rows
     dashboard/onboarding/page.tsx Onboarding progress overview (PRD §6/§10/§11)
-    dashboard/users/              HR_ADMIN-only role-assignment screen
+    dashboard/leave/              Leave: balances, apply form, approve/reject (PRD §14)
+    dashboard/attendance/         Attendance: HR marks status, personal summary (PRD §13)
+    dashboard/users/              HR_ADMIN-only role assignment + employee linking
     api/auth/[...nextauth]/       Auth.js route handler
   lib/
     auth.ts                       Auth.js config (Entra ID provider, RBAC session)
@@ -66,12 +74,16 @@ src/
     roles.ts                      Pure role constants/labels — safe to import from
                                    "use client" files (rbac.ts is not — see comment)
     safe-redirect.ts              Open-redirect guard for callbackUrl-style params
+    leave-balance.ts              ensureLeaveBalance() — lazy per-year balance creation
     actions/employee.ts           Server Action: create employee (transactional,
-                                   also seeds onboarding checklists)
+                                   also seeds onboarding checklists + leave balances)
     actions/employee-detail.ts    Server Actions: update employee (+ AuditLog),
                                    change lifecycle status (+ EmployeeStatusHistory)
     actions/onboarding.ts         Server Actions: update document/IT task status
-    actions/user-role.ts          Server Action: change a user's role (+ AuditLog)
+    actions/user-role.ts          Server Actions: change a user's role (+ AuditLog),
+                                   link/unlink a user to an employee record
+    actions/leave.ts              Server Actions: apply/approve/reject/cancel leave
+    actions/attendance.ts         Server Action: mark attendance (HR-only)
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -228,6 +240,23 @@ git push -u origin main
 - Onboarding documents track **status only** — there's no file storage yet
   (see roadmap: Vercel Blob upload), and there's no automated reminder for
   pending documents/IT tasks yet (see roadmap: Vercel Cron).
+- **Leave has no carry-forward, accrual, or encashment** (all in PRD §14) —
+  every `LeaveBalance` is a flat per-year allocation at the `LeaveType`'s
+  default, created lazily the first time it's needed. A request spanning a
+  year boundary (e.g. Dec 30 → Jan 2) is checked/deducted entirely against
+  the *start* date's year, not split across both. HR can't add/edit leave
+  types via the UI yet — only the 3 seeded defaults exist.
+  `applyForLeave`'s balance check is a courtesy, not a reservation (two
+  pending requests can both pass it) — `decideLeaveRequest` re-checks
+  atomically before deducting, which is what actually prevents overdrawing.
+- **Attendance is HR-marked only** — no self-service marking, no
+  employee-submitted correction-request → manager-approval flow (both in
+  PRD §13), and no external attendance-device integration (PRD §32 frames
+  that as a separate integration anyway).
+- Self-service (leave/attendance) depends on a User being linked to an
+  Employee record via `/dashboard/users` — this is manual (HR_ADMIN picks
+  from a dropdown), not automatic. Nothing matches by email; there's no
+  "work email" field on Employee to match against the SSO email.
 
 ## Roadmap: remaining PRD modules
 
@@ -239,15 +268,21 @@ Suggested build order, grouped roughly by the PRD's own priority framework
    are already trackable; this adds an actual file behind each
    `OnboardingDocument` row.
 2. Automated reminders (Vercel Cron + an email provider like Resend) for
-   pending onboarding documents/IT tasks and upcoming probation ends.
-3. Attendance + Leave modules (§13–§15): leave types/balances, apply/approve
-   flow, WFH requests.
-4. Probation tracking automation (§16): scheduled job flips status and
+   pending onboarding documents/IT tasks, upcoming probation ends, and
+   pending leave requests.
+3. Attendance correction requests (employee submits → manager approves →
+   HR visibility) and manager/self-service attendance marking — today
+   attendance is HR-marked only.
+4. Leave type management UI (HR can currently only use the 3 seeded
+   defaults) and carry-forward/accrual (PRD §14).
+5. WFH as its own request workflow (PRD §15) — currently just an attendance
+   status value, no separate request/approval flow.
+6. Probation tracking automation (§16): scheduled job flips status and
    notifies HR/manager at 30/15/7 days — can now call the same
    `changeEmployeeStatus` action the detail page uses.
-5. Exit/separation workflow (§24–§26): resignation → checklist → asset
+7. Exit/separation workflow (§24–§26): resignation → checklist → asset
    return → clearance.
-6. HR Helpdesk (§21): request categories, SLA dashboard.
+8. HR Helpdesk (§21): request categories, SLA dashboard.
 
 **Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
 asset management (§26), integrations (§32) — Outlook/Teams notifications,

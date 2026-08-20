@@ -26,12 +26,57 @@ export default async function DashboardPage() {
   const role = session.user.role;
 
   if (!HR_VIEW_ROLES.includes(role)) {
+    const currentYear = new Date().getFullYear();
+    const employee = await prisma.employee.findUnique({
+      where: { userId: session.user.id },
+      include: {
+        leaveBalances: { where: { year: currentYear }, include: { leaveType: true } },
+      },
+    });
+
     return (
       <div>
         <h1 className="text-xl font-semibold">Welcome, {session.user.name}</h1>
-        <p className="mt-2 text-sm text-black/60 dark:text-white/60">
-          Employee and manager self-service views (leave, attendance,
-          documents, requests) land in a later phase — see the MVP roadmap.
+
+        {employee ? (
+          <>
+            <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+              {employee.employeeCode} · {employee.designation} · {employee.department}
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {employee.leaveBalances.map((b) => (
+                <StatCard
+                  key={b.id}
+                  label={`${b.leaveType.name} remaining`}
+                  value={b.allocated - b.used}
+                />
+              ))}
+            </div>
+            <div className="mt-6 flex gap-3 text-sm">
+              <Link
+                href="/dashboard/leave"
+                className="rounded-md bg-black px-3 py-1.5 font-medium text-white dark:bg-white dark:text-black"
+              >
+                Apply for leave
+              </Link>
+              <Link
+                href="/dashboard/attendance"
+                className="rounded-md border border-black/15 px-3 py-1.5 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                My attendance
+              </Link>
+            </div>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-black/60 dark:text-white/60">
+            Your account isn&apos;t linked to an employee record yet — contact
+            HR to enable leave and attendance self-service.
+          </p>
+        )}
+
+        <p className="mt-6 text-sm text-black/60 dark:text-white/60">
+          Documents and HR requests self-service land in a later phase — see
+          the MVP roadmap.
         </p>
       </div>
     );

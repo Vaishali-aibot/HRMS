@@ -7,6 +7,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES, requireRole } from "@/lib/rbac";
 import { DocumentType, ITTaskType } from "@/generated/prisma/enums";
+import { DEFAULT_LEAVE_TYPES, ensureLeaveBalance } from "@/lib/leave-balance";
 
 const createEmployeeSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
@@ -129,6 +130,15 @@ export async function createEmployee(
           type,
         })),
       });
+
+      // Leave entitlement, same idea (PRD §14): give the new employee a
+      // balance for every active leave type for the current year.
+      await tx.leaveType.createMany({ data: DEFAULT_LEAVE_TYPES, skipDuplicates: true });
+      const leaveTypes = await tx.leaveType.findMany({ where: { isActive: true } });
+      const currentYear = new Date().getFullYear();
+      for (const leaveType of leaveTypes) {
+        await ensureLeaveBalance(tx, employee.id, leaveType.id, leaveType.annualDays, currentYear);
+      }
     });
   } catch (err) {
     console.error("createEmployee failed:", err);

@@ -151,6 +151,9 @@ model Employee {
   statusHistory     EmployeeStatusHistory[]
   onboardingDocuments OnboardingDocument[]
   itTasks             ITOnboardingTask[]
+  leaveBalances       LeaveBalance[]
+  leaveRequests       LeaveRequest[]
+  attendanceRecords   AttendanceRecord[]
 
   // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
   ctcAnnual         Decimal?  @db.Decimal(14, 2)
@@ -283,4 +286,106 @@ model ITOnboardingTask {
 
   @@unique([employeeId, type])
   @@index([employeeId])
+}
+
+// ---------------------------------------------------------------------------
+// Leave management (PRD §14). Carry-forward/accrual/encashment (also in
+// PRD §14) are NOT implemented — every LeaveBalance is a flat per-year
+// allocation, lazily created at the employee's default entitlement the
+// first time it's needed. See README "Known items to revisit".
+// ---------------------------------------------------------------------------
+
+/// Org-wide leave type configuration. Seeded with 3 defaults the first time
+/// an employee is created (see src/lib/actions/employee.ts); HR can't add
+/// more via the UI yet (see roadmap).
+model LeaveType {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  annualDays  Float
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  balances LeaveBalance[]
+  requests LeaveRequest[]
+}
+
+/// One row per employee per leave type per calendar year.
+model LeaveBalance {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId String
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+  year        Int
+  allocated   Float
+  used        Float     @default(0)
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@index([employeeId])
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Employee applies -> manager (or HR) approves/rejects -> balance updates
+/// on approval, not on application (PRD §14 workflow).
+model LeaveRequest {
+  id             String             @id @default(cuid())
+  employeeId     String
+  employee       Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId    String
+  leaveType      LeaveType          @relation(fields: [leaveTypeId], references: [id])
+  startDate      DateTime
+  endDate        DateTime
+  days           Float
+  reason         String?
+  status         LeaveRequestStatus @default(PENDING)
+  approverId     String? // User.id of whoever approved/rejected
+  decidedAt      DateTime?
+  decisionReason String?
+  createdAt      DateTime           @default(now())
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Attendance (PRD §13). HR-marked only for now — there's no employee
+// self-service correction-request flow yet (no external attendance device
+// integration either, per the PRD's own §32 framing of that as an
+// integration). See README "Known items to revisit".
+// ---------------------------------------------------------------------------
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  WORK_FROM_HOME
+  HOLIDAY
+  ON_LEAVE
+  MISSING
+}
+
+/// One row per employee per calendar day. `date` is stored as UTC midnight
+/// of the calendar day (same convention as Employee.dateOfJoining) — always
+/// format for display with an explicit UTC timeZone.
+model AttendanceRecord {
+  id           String           @id @default(cuid())
+  employeeId   String
+  employee     Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date         DateTime
+  status       AttendanceStatus
+  notes        String?
+  markedById   String? // User.id of the HR user who set this
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
 }
