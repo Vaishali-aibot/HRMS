@@ -69,7 +69,11 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   authorization shape as leave/corrections; an approval writes
   `WORK_FROM_HOME` directly onto every covered `AttendanceRecord` date +
   `AuditLog` entries, so it shows up on the attendance views immediately
-  rather than needing a separate sync step), **exit/separation** (PRD
+  rather than needing a separate sync step; a singleton `WFHPolicy`
+  configured by HR at `/dashboard/wfh` enforces eligibility by employment
+  type, a location allowlist, and max-days-per-month/year limits — checked
+  as a courtesy when applying and for real right before approving, same
+  two-stage pattern as a leave balance check), **exit/separation** (PRD
   §24–§26 — recording a resignation computes `lastWorkingDay` from
   `noticePeriodDays`, moves status to `NOTICE_PERIOD`, and seeds an
   11-item exit checklist the same way onboarding seeds its own; a
@@ -88,12 +92,10 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   daily HR digest email — not a configurable SLA policy, just a fixed
   visibility threshold)
 
-This completes the PRD's own P0 list (§43). Not yet built: WFH eligibility/
-max-days/location-restriction policy (PRD §15 configuration — the
-request/approve mechanics exist, the policy engine doesn't), a
+This completes the PRD's own P0 list (§43). Not yet built: a
 resignation-approval gate before notice period starts (HR records it
 directly instead), a comment thread on HR requests (one description +
-one resolution note, not a conversation), reports, etc. — see
+one resolution note, not a conversation) — see
 [Roadmap](#roadmap-remaining-prd-modules) below.
 
 **P1 — performance management** (PRD §17–§18 — goal setting, self/manager
@@ -556,9 +558,7 @@ What's left, grouped roughly by the PRD's own priority framework:
 
 **Loose ends on P0 modules (small, not full modules of their own):**
 1. ~~Leave accrual/encashment (PRD §14)~~ — done, see "What's built" above.
-2. WFH policy (PRD §15) — eligibility, max-days limits, location
-   restrictions. The request/approve/reflect-in-attendance mechanics exist
-   (`/dashboard/wfh`); nothing enforces a policy on top of them yet.
+2. ~~WFH policy (PRD §15)~~ — done, see "What's built" above.
 3. A resignation-approval gate before notice period starts (PRD §24's
    literal first two steps) — HR records the resignation directly today.
 

@@ -25,6 +25,72 @@ function eachDateInRange(start: Date, end: Date): Date[] {
   return dates;
 }
 
+/**
+ * PRD §15 policy: eligibility (by employment type), location restriction,
+ * and max-days limits — enforced here, checked both when an employee
+ * applies (a courtesy — same "two pending requests can both pass this"
+ * caveat as applyForLeave) and again in decideWFHRequest right before
+ * approving (the point that actually matters). Returns an error message,
+ * or null if the request is allowed.
+ *
+ * Max-days usage is attributed to each existing request's own start-date
+ * year/month — same disclosed simplification as leave.ts's year-boundary
+ * handling — not a precise per-day breakdown for requests spanning a
+ * month/year boundary.
+ */
+async function checkWFHPolicy(
+  employee: { id: string; employmentType: string; location: string | null },
+  startDate: Date,
+  days: number
+): Promise<string | null> {
+  const policy = await prisma.wFHPolicy.findUnique({ where: { id: "default" } });
+  if (!policy) return null;
+
+  if (
+    policy.eligibleEmploymentTypes.length > 0 &&
+    !policy.eligibleEmploymentTypes.includes(employee.employmentType as never)
+  ) {
+    return "Your employment type isn't eligible for WFH under the current policy.";
+  }
+
+  if (policy.allowedLocations.length > 0) {
+    const allowed = employee.location
+      ? policy.allowedLocations.some(
+          (loc) => loc.toLowerCase() === employee.location!.toLowerCase()
+        )
+      : false;
+    if (!allowed) {
+      return "WFH isn't available for your location under the current policy.";
+    }
+  }
+
+  if (policy.maxDaysPerMonth != null || policy.maxDaysPerYear != null) {
+    const year = startDate.getUTCFullYear();
+    const month = startDate.getUTCMonth();
+    const approved = await prisma.wFHRequest.findMany({
+      where: { employeeId: employee.id, status: "APPROVED" },
+      select: { startDate: true, endDate: true },
+    });
+    let usedThisYear = 0;
+    let usedThisMonth = 0;
+    for (const r of approved) {
+      const d = inclusiveDayCount(r.startDate, r.endDate);
+      if (r.startDate.getUTCFullYear() === year) {
+        usedThisYear += d;
+        if (r.startDate.getUTCMonth() === month) usedThisMonth += d;
+      }
+    }
+    if (policy.maxDaysPerYear != null && usedThisYear + days > policy.maxDaysPerYear) {
+      return `This would exceed the yearly WFH limit of ${policy.maxDaysPerYear} day(s) (${usedThisYear} already approved this year).`;
+    }
+    if (policy.maxDaysPerMonth != null && usedThisMonth + days > policy.maxDaysPerMonth) {
+      return `This would exceed the monthly WFH limit of ${policy.maxDaysPerMonth} day(s) (${usedThisMonth} already approved this month).`;
+    }
+  }
+
+  return null;
+}
+
 const requestSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
@@ -63,6 +129,11 @@ export async function requestWFH(
   }
   if (inclusiveDayCount(startDate, endDate) > MAX_REQUEST_DAYS) {
     return { error: `A single request can't span more than ${MAX_REQUEST_DAYS} days.` };
+  }
+
+  const policyError = await checkWFHPolicy(employee, startDate, inclusiveDayCount(startDate, endDate));
+  if (policyError) {
+    return { error: policyError };
   }
 
   try {
@@ -142,6 +213,18 @@ export async function decideWFHRequest(
     }
 
     if (decision === "APPROVED") {
+      // The real enforcement point (application-time was only a courtesy
+      // check) — re-check right before approving, since other requests
+      // may have been approved in between.
+      const policyError = await checkWFHPolicy(
+        request.employee,
+        request.startDate,
+        inclusiveDayCount(request.startDate, request.endDate)
+      );
+      if (policyError) {
+        return { error: policyError };
+      }
+
       await prisma.$transaction(async (tx) => {
         // Authoritative override, same as an approved attendance
         // correction — writes WORK_FROM_HOME onto every covered date.

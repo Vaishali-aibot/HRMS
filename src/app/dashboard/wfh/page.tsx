@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES } from "@/lib/rbac";
 
 import { ApplyWFHForm } from "./apply-wfh-form";
+import { WFHPolicyForm } from "./wfh-policy-form";
 import { WFHRequestRow } from "./wfh-request-row";
 
 function fmt(d: Date) {
@@ -19,6 +20,7 @@ export default async function WFHPage() {
 
   const canViewOrgWide = HR_VIEW_ROLES.includes(session.user.role);
   const canDecideAnyRequest = HR_WRITE_ROLES.includes(session.user.role);
+  const isHRWrite = HR_WRITE_ROLES.includes(session.user.role);
   const isManager = session.user.role === "MANAGER";
 
   const employee = await prisma.employee.findUnique({
@@ -26,7 +28,7 @@ export default async function WFHPage() {
     include: { wfhRequests: { orderBy: { createdAt: "desc" }, take: 20 } },
   });
 
-  const [teamRequests, orgRequests] = await Promise.all([
+  const [teamRequests, orgRequests, policy] = await Promise.all([
     isManager && employee
       ? prisma.wFHRequest.findMany({
           where: { status: "PENDING", employee: { reportingManagerId: employee.id } },
@@ -41,6 +43,7 @@ export default async function WFHPage() {
           include: { employee: true },
         })
       : Promise.resolve([]),
+    isHRWrite ? prisma.wFHPolicy.findUnique({ where: { id: "default" } }) : Promise.resolve(null),
   ]);
 
   return (
@@ -52,6 +55,30 @@ export default async function WFHPage() {
           employee&apos;s attendance record automatically.
         </p>
       </div>
+
+      {isHRWrite && (
+        <div>
+          <h2 className="text-sm font-semibold">WFH policy</h2>
+          <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+            Applies to every new or newly-decided request. Doesn&apos;t
+            retroactively affect requests already approved.
+          </p>
+          <div className="mt-2">
+            <WFHPolicyForm
+              // Keyed on the policy's content — see the CycleRow/GoalRow/
+              // AssetRow/LeaveTypeRow comments on why an uncontrolled
+              // form's inputs need this to reflect a just-saved value.
+              key={JSON.stringify(policy)}
+              policy={{
+                maxDaysPerMonth: policy?.maxDaysPerMonth ?? null,
+                maxDaysPerYear: policy?.maxDaysPerYear ?? null,
+                eligibleEmploymentTypes: policy?.eligibleEmploymentTypes ?? [],
+                allowedLocations: policy?.allowedLocations ?? [],
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {employee ? (
         <>

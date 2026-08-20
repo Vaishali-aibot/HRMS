@@ -610,11 +610,21 @@ model AssetHistory {
 // directly onto the covered AttendanceRecord rows (+ AuditLog), same
 // authoritative-override pattern as an approved correction.
 //
-// NOT implemented: WFH eligibility, max-days policy, and location
-// restrictions (all PRD §15 configuration items) — there's no policy
-// engine yet, just the request/approve/reflect-in-attendance mechanics.
-// See README "Known items to revisit".
+// Policy (eligibility, max-days, location restriction) lives in the
+// singleton WFHPolicy row below, enforced in src/lib/actions/wfh.ts.
 // ---------------------------------------------------------------------------
+
+/// Singleton (always `id: "default"`) — HR configures this once at
+/// /dashboard/wfh. Empty arrays mean "no restriction" on that axis; a null
+/// max-days field means no cap on that axis.
+model WFHPolicy {
+  id                      String           @id @default("default")
+  maxDaysPerMonth         Int?
+  maxDaysPerYear          Int?
+  eligibleEmploymentTypes EmploymentType[]
+  allowedLocations        String[]
+  updatedAt               DateTime         @updatedAt
+}
 
 enum WFHRequestStatus {
   PENDING
