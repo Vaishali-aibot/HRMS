@@ -524,8 +524,36 @@ model Asset {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
+  history AssetHistory[]
+
   @@index([assignedEmployeeId])
   @@index([status])
+}
+
+enum AssetHistoryAction {
+  ASSIGNED
+  RETURNED
+  CONDITION_UPDATED
+  RETIRED
+  LOST
+}
+
+/// Every assignment/return/condition-change/retirement/loss event for an
+/// asset, so damage/condition history (PRD §26) is a real log rather than
+/// just the single free-text `Asset.condition` field reflecting whatever
+/// happened most recently.
+model AssetHistory {
+  id            String             @id @default(cuid())
+  assetId       String
+  asset         Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  action        AssetHistoryAction
+  employeeId    String? // who the asset was assigned to/returned from, if relevant
+  condition     String?
+  notes         String?
+  performedById String? // User.id
+  occurredAt    DateTime           @default(now())
+
+  @@index([assetId])
 }
 
 // ---------------------------------------------------------------------------

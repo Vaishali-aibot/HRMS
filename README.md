@@ -74,9 +74,12 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   `noticePeriodDays`, moves status to `NOTICE_PERIOD`, and seeds an
   11-item exit checklist the same way onboarding seeds its own; a
   dedicated `/dashboard/exits` view lists everyone currently in notice
-  period with checklist progress; a deliberately minimal **asset registry**
-  (`/dashboard/assets`) makes the checklist's "Asset Return" step real —
-  register an asset, assign it to an employee, mark it returned), **HR
+  period with checklist progress; an **asset registry** (`/dashboard/assets`)
+  makes the checklist's "Asset Return" step real — register, assign, and
+  return an asset (assignable to an employee at any lifecycle status,
+  including pre-boarding — so onboarding-time issuing already works with
+  no separate code path), plus log condition/damage notes, retire, or
+  report an asset lost, with a full timestamped history per asset), **HR
   helpdesk** (PRD §21 — employees submit categorized requests, HR assigns/
   progresses them through Submitted → Assigned → In Progress → Resolved →
   Closed with a resolution note, `/dashboard/requests` shows an
@@ -532,9 +535,11 @@ What's left, grouped roughly by the PRD's own priority framework:
 **Next (P1):**
 1. ~~Performance cycles + PIP (§17–§18)~~ — done, see "What's built" above.
 2. ~~Employee recognition (§19)~~ — done, see "What's built" above.
-3. Fuller asset management (§26) — issuing during onboarding, condition/
-   damage history, richer IT tracking; today's registry is
-   exit-checklist-minimal.
+3. ~~Fuller asset management (§26)~~ — condition/damage history and
+   lost/retired lifecycle done, see "What's built" above. Still not
+   built: richer IT-asset-specific tracking (warranty, purchase cost,
+   vendor) — the `type`/`serialNumber`/`condition` fields stay free text,
+   same design tradeoff as `Employee.department`.
 4. Integrations (§32) — Outlook/Teams notifications, e-signature. Email
    exists (Resend) but nothing else does.
 5. Reports & analytics (§27–§28) — the PRD wants dedicated report views

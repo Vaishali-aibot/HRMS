@@ -4,26 +4,35 @@ import { HR_WRITE_ROLES, requireRoleForPage } from "@/lib/rbac";
 import { AddAssetForm } from "./add-asset-form";
 import { AssetRow } from "./asset-row";
 
+function fmt(d: Date) {
+  return d.toLocaleDateString(undefined, { timeZone: "UTC" });
+}
+
 export default async function AssetsPage() {
   await requireRoleForPage(...HR_WRITE_ROLES);
 
   const [assets, employees] = await Promise.all([
     prisma.asset.findMany({
       orderBy: { createdAt: "desc" },
-      include: { assignedEmployee: { select: { employeeCode: true, fullName: true } } },
+      include: {
+        assignedEmployee: { select: { employeeCode: true, fullName: true } },
+        history: { orderBy: { occurredAt: "desc" }, take: 10 },
+      },
     }),
     prisma.employee.findMany({
       orderBy: { fullName: "asc" },
       select: { id: true, employeeCode: true, fullName: true },
     }),
   ]);
+  const employeeNameById = new Map(employees.map((e) => [e.id, `${e.employeeCode} — ${e.fullName}`]));
 
   return (
     <div>
       <h1 className="text-xl font-semibold">Assets</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        PRD §26. Deliberately minimal — enough to make an exit&apos;s
-        &quot;Asset Return&quot; step real, not a full asset-management module.
+        PRD §26 — register, assign, and track condition/damage history over
+        an asset&apos;s lifecycle (assigned, returned, condition updates,
+        retired, lost).
       </p>
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
@@ -38,7 +47,25 @@ export default async function AssetsPage() {
           </thead>
           <tbody>
             {assets.map((a) => (
-              <AssetRow key={a.id} asset={a} employees={employees} />
+              <AssetRow
+                // Keyed on status too — see the same reasoning on
+                // CycleRow/GoalRow in src/app/dashboard/performance/page.tsx:
+                // an uncontrolled input/select doesn't re-sync its displayed
+                // value on a revalidatePath re-render unless remounted.
+                key={`${a.id}:${a.status}`}
+                asset={{
+                  ...a,
+                  history: a.history.map((h) => ({
+                    id: h.id,
+                    action: h.action,
+                    condition: h.condition,
+                    notes: h.notes,
+                    occurredAt: fmt(h.occurredAt),
+                    employeeName: h.employeeId ? employeeNameById.get(h.employeeId) ?? null : null,
+                  })),
+                }}
+                employees={employees}
+              />
             ))}
             {assets.length === 0 && (
               <tr>
