@@ -40,12 +40,17 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   balance per employee per year created lazily, apply → manager-or-HR
   approve/reject → balance deducted on approval with a re-check to prevent
   overdrawing), **attendance** (PRD §13 — HR marks daily status per
-  employee; everyone gets a personal dashboard summary of their own record)
+  employee, with an `AuditLog` entry on every override; everyone gets a
+  personal dashboard summary of their own record; employees can submit
+  **correction requests** for a past date → their manager or HR
+  approves/rejects → an approval applies the correction and audit-logs it,
+  same as a direct HR override)
 
 Not yet built: actual document **upload/storage** (the document checklist
 tracks status only, no file attached yet — see Known items), WFH as its own
 request workflow (folded into attendance's `WORK_FROM_HOME` status instead),
-attendance correction requests, performance, recognition, exits, reports,
+self-service/manager attendance *marking* (only correction *requests* exist
+— direct marking stays HR-only), performance, recognition, exits, reports,
 automated reminders, etc. — see
 [Roadmap](#roadmap-remaining-prd-modules) below for a suggested build order.
 
@@ -83,7 +88,9 @@ src/
     actions/user-role.ts          Server Actions: change a user's role (+ AuditLog),
                                    link/unlink a user to an employee record
     actions/leave.ts              Server Actions: apply/approve/reject/cancel leave
-    actions/attendance.ts         Server Action: mark attendance (HR-only)
+    actions/attendance.ts         Server Action: mark attendance (HR-only, + AuditLog)
+    actions/attendance-correction.ts  Server Actions: request/approve/reject/cancel
+                                       an attendance correction (+ AuditLog on approval)
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -249,10 +256,21 @@ git push -u origin main
   `applyForLeave`'s balance check is a courtesy, not a reservation (two
   pending requests can both pass it) — `decideLeaveRequest` re-checks
   atomically before deducting, which is what actually prevents overdrawing.
-- **Attendance is HR-marked only** — no self-service marking, no
-  employee-submitted correction-request → manager-approval flow (both in
-  PRD §13), and no external attendance-device integration (PRD §32 frames
-  that as a separate integration anyway).
+- **Attendance marking is still HR-only** — employees/managers can *request*
+  a correction (approved into an actual record change + audit log), but
+  can't mark attendance directly themselves. No external attendance-device
+  integration either (PRD §32 frames that as a separate integration).
+- A correction request snapshots `currentStatus` at submission time but
+  `decideAttendanceCorrection` audit-logs the *actual* status at decision
+  time (fetched fresh, not the snapshot) — correct, but means the two can
+  legitimately differ if the record changed in between (e.g. HR marked it
+  directly while the request was pending). Not a bug, just worth knowing
+  when reading the audit trail.
+- Duplicate/rapid-fire correction requests for the same date are checked
+  but not locked — like the leave balance check, it's a courtesy guard
+  against a normal double-submit, not a race-proof constraint. Low stakes
+  here (worst case is two pending requests for the same date; deciding one
+  doesn't auto-resolve the other, so HR/the manager would just see both).
 - Self-service (leave/attendance) depends on a User being linked to an
   Employee record via `/dashboard/users` — this is manual (HR_ADMIN picks
   from a dropdown), not automatic. Nothing matches by email; there's no
@@ -270,9 +288,8 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 2. Automated reminders (Vercel Cron + an email provider like Resend) for
    pending onboarding documents/IT tasks, upcoming probation ends, and
    pending leave requests.
-3. Attendance correction requests (employee submits → manager approves →
-   HR visibility) and manager/self-service attendance marking — today
-   attendance is HR-marked only.
+3. Manager/self-service *direct* attendance marking — today only HR can
+   mark directly; everyone else goes through a correction request.
 4. Leave type management UI (HR can currently only use the 3 seeded
    defaults) and carry-forward/accrual (PRD §14).
 5. WFH as its own request workflow (PRD §15) — currently just an attendance

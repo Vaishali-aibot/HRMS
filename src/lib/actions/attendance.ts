@@ -29,8 +29,9 @@ export async function markAttendance(
 ): Promise<MarkAttendanceState> {
   let session;
   try {
-    // HR-only for now — no manager/self-service marking or correction
-    // requests yet. See README "Known items to revisit".
+    // Direct marking/overriding is HR-only — a manager or employee who
+    // disagrees with a record goes through requestAttendanceCorrection
+    // instead (src/lib/actions/attendance-correction.ts).
     session = await requireRole(...HR_WRITE_ROLES);
   } catch {
     return { error: "You do not have permission to perform this action." };
@@ -48,10 +49,33 @@ export async function markAttendance(
   const date = new Date(parsed.data.date);
 
   try {
-    await prisma.attendanceRecord.upsert({
+    const existing = await prisma.attendanceRecord.findUnique({
       where: { employeeId_date: { employeeId, date } },
-      update: { status, markedById: session.user.id },
-      create: { employeeId, date, status, markedById: session.user.id },
+    });
+
+    if (existing && existing.status === status) {
+      return {}; // no-op save — nothing changed, nothing to audit
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const record = await tx.attendanceRecord.upsert({
+        where: { employeeId_date: { employeeId, date } },
+        update: { status, markedById: session.user.id },
+        create: { employeeId, date, status, markedById: session.user.id },
+      });
+
+      // HR overriding/correcting attendance needs an audit trail (PRD
+      // §13) — same AuditLog table field edits and role changes use.
+      await tx.auditLog.create({
+        data: {
+          entityType: "AttendanceRecord",
+          entityId: record.id,
+          field: "status",
+          oldValue: existing?.status ?? null,
+          newValue: status,
+          changedById: session.user.id,
+        },
+      });
     });
   } catch (err) {
     console.error("markAttendance failed:", err);

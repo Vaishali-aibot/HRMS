@@ -154,6 +154,7 @@ model Employee {
   leaveBalances       LeaveBalance[]
   leaveRequests       LeaveRequest[]
   attendanceRecords   AttendanceRecord[]
+  attendanceCorrectionRequests AttendanceCorrectionRequest[]
 
   // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
   ctcAnnual         Decimal?  @db.Decimal(14, 2)
@@ -354,10 +355,8 @@ model LeaveRequest {
 }
 
 // ---------------------------------------------------------------------------
-// Attendance (PRD §13). HR-marked only for now — there's no employee
-// self-service correction-request flow yet (no external attendance device
-// integration either, per the PRD's own §32 framing of that as an
-// integration). See README "Known items to revisit".
+// Attendance (PRD §13). No external attendance-device integration (PRD §32
+// frames that as a separate integration).
 // ---------------------------------------------------------------------------
 
 enum AttendanceStatus {
@@ -388,4 +387,35 @@ model AttendanceRecord {
   @@unique([employeeId, date])
   @@index([employeeId])
   @@index([date])
+}
+
+enum AttendanceCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Employee-initiated dispute of an attendance record (PRD §13 workflow:
+/// "Employee submits correction request → Manager approval → HR
+/// visibility"). Approving one applies `requestedStatus` to the
+/// AttendanceRecord for (employeeId, date) and writes an AuditLog entry —
+/// same as a direct HR override in markAttendance (PRD's "HR should be
+/// able to override/correct attendance with an audit trail").
+model AttendanceCorrectionRequest {
+  id              String                     @id @default(cuid())
+  employeeId      String
+  employee        Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  currentStatus   AttendanceStatus? // snapshot at request time; null = no record existed
+  requestedStatus AttendanceStatus
+  reason          String
+  status          AttendanceCorrectionStatus @default(PENDING)
+  approverId      String?
+  decidedAt       DateTime?
+  decisionReason  String?
+  createdAt       DateTime                   @default(now())
+
+  @@index([employeeId])
+  @@index([status])
 }
