@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES, requireRoleForPage } from "@/lib/rbac";
 
+import { DocumentRow } from "./document-row";
 import { EditEmployeeForm } from "./edit-employee-form";
+import { ITTaskRow } from "./it-task-row";
 import { StatusChangeForm } from "./status-change-form";
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
@@ -31,6 +33,8 @@ export default async function EmployeeDetailPage({
     include: {
       reportingManager: { select: { id: true, employeeCode: true, fullName: true } },
       statusHistory: { orderBy: { changedAt: "desc" } },
+      onboardingDocuments: { orderBy: { type: "asc" } },
+      itTasks: { orderBy: { type: "asc" } },
     },
   });
 
@@ -114,6 +118,30 @@ export default async function EmployeeDetailPage({
       {canEdit && (
         <StatusChangeForm employeeId={employee.id} currentStatus={employee.status} />
       )}
+
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div>
+          <h2 className="text-sm font-semibold">Onboarding documents</h2>
+          <ul className="mt-2 rounded-xl border border-black/10 dark:border-white/15">
+            {employee.onboardingDocuments.map((d) => (
+              <DocumentRow
+                key={d.id}
+                document={d}
+                employeeId={employee.id}
+                editable={canEdit}
+              />
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">IT setup</h2>
+          <ul className="mt-2 rounded-xl border border-black/10 dark:border-white/15">
+            {employee.itTasks.map((t) => (
+              <ITTaskRow key={t.id} task={t} employeeId={employee.id} editable={canEdit} />
+            ))}
+          </ul>
+        </div>
+      </div>
 
       <div>
         <h2 className="text-sm font-semibold">Lifecycle history</h2>

@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES, requireRole } from "@/lib/rbac";
+import { DocumentType, ITTaskType } from "@/generated/prisma/enums";
 
 const createEmployeeSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
@@ -111,6 +112,22 @@ export async function createEmployee(
           reason: "Employee record created",
           changedById: session.user.id,
         },
+      });
+
+      // Onboarding starts automatically the moment the record exists (PRD
+      // §10/§11): one checklist row per document/IT task type, all
+      // NOT_SUBMITTED/PENDING until HR or IT updates them.
+      await tx.onboardingDocument.createMany({
+        data: Object.values(DocumentType).map((type) => ({
+          employeeId: employee.id,
+          type,
+        })),
+      });
+      await tx.iTOnboardingTask.createMany({
+        data: Object.values(ITTaskType).map((type) => ({
+          employeeId: employee.id,
+          type,
+        })),
       });
     });
   } catch (err) {

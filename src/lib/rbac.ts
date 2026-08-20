@@ -3,6 +3,12 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import type { AppRole } from "@/types/next-auth";
 
+// Server-only guards. Pure role constants/labels live in src/lib/roles.ts —
+// import from there instead in any "use client" file (see the comment on
+// that file for why: this module's auth()/Prisma chain must never end up
+// in a client bundle).
+export { HR_VIEW_ROLES, HR_WRITE_ROLES, ROLE_LABELS } from "@/lib/roles";
+
 /**
  * Server-side role guard for Server Actions / data-mutation functions.
  *
@@ -50,17 +56,3 @@ export async function requireRoleForPage(...allowed: AppRole[]) {
   }
   return session;
 }
-
-/** Roles that can see org-wide HR data (full roster, HR metrics, reports). */
-export const HR_VIEW_ROLES: AppRole[] = ["HR_ADMIN", "HR_EXECUTIVE", "MANAGEMENT"];
-
-/** Roles that can create/edit Employee Master records. */
-export const HR_WRITE_ROLES: AppRole[] = ["HR_ADMIN", "HR_EXECUTIVE"];
-
-export const ROLE_LABELS: Record<AppRole, string> = {
-  HR_ADMIN: "HR Admin",
-  HR_EXECUTIVE: "HR Executive",
-  MANAGER: "Manager",
-  EMPLOYEE: "Employee",
-  MANAGEMENT: "Management",
-};

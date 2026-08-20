@@ -149,6 +149,8 @@ model Employee {
 
   status            EmploymentStatus @default(PRE_BOARDING)
   statusHistory     EmployeeStatusHistory[]
+  onboardingDocuments OnboardingDocument[]
+  itTasks             ITOnboardingTask[]
 
   // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
   ctcAnnual         Decimal?  @db.Decimal(14, 2)
@@ -182,11 +184,9 @@ model EmployeeStatusHistory {
   @@index([employeeId])
 }
 
-/// Generic audit trail for sensitive field changes (PRD §31).
-/// NOTE: no code path writes to this table yet — there is no edit/update
-/// mutation in the codebase yet for it to log. Wire this up when the first
-/// "edit employee" / compensation-change action is built; see README.md
-/// "Known items to revisit".
+/// Generic audit trail for sensitive field changes (PRD §31). entityType is
+/// e.g. "Employee" (field edits) or "User" (role changes) — see
+/// src/lib/actions/employee-detail.ts and src/lib/actions/user-role.ts.
 model AuditLog {
   id         String   @id @default(cuid())
   entityType String   // e.g. "Employee"
@@ -208,4 +208,79 @@ model AuditLog {
 model Counter {
   name  String @id
   value Int    @default(0)
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding (PRD §10–§11). Both checklists are created automatically —
+// one row per enum value — the moment an Employee record is created (see
+// src/lib/actions/employee.ts), inside the same transaction as the insert.
+// ---------------------------------------------------------------------------
+
+enum DocumentType {
+  PAN
+  AADHAAR
+  EDUCATION_CERTIFICATE
+  PREVIOUS_EMPLOYMENT_PROOF
+  BANK_PROOF
+  PHOTOGRAPH
+  EXPERIENCE_LETTER
+  RELIEVING_LETTER
+}
+
+enum DocumentStatus {
+  NOT_SUBMITTED
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RESUBMISSION_REQUIRED
+}
+
+/// One row per required document per employee (PRD §10). No file storage
+/// yet — this tracks status only; see README roadmap for the Vercel Blob
+/// upload step.
+model OnboardingDocument {
+  id         String         @id @default(cuid())
+  employeeId String
+  employee   Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       DocumentType
+  status     DocumentStatus @default(NOT_SUBMITTED)
+  notes      String?
+  updatedAt  DateTime       @updatedAt
+  createdAt  DateTime       @default(now())
+
+  @@unique([employeeId, type])
+  @@index([employeeId])
+}
+
+enum ITTaskType {
+  LAPTOP_ALLOCATION
+  EMAIL_CREATION
+  HRMS_ACCESS
+  COMMUNICATION_TOOL_ACCESS
+  VPN_ACCESS
+  APPLICATION_ACCESS
+  SOFTWARE_INSTALLATION
+  SECURITY_ACCESS
+}
+
+enum ITTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// One row per IT setup task per employee (PRD §11).
+model ITOnboardingTask {
+  id         String       @id @default(cuid())
+  employeeId String
+  employee   Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       ITTaskType
+  status     ITTaskStatus @default(PENDING)
+  notes      String?
+  updatedAt  DateTime     @updatedAt
+  createdAt  DateTime     @default(now())
+
+  @@unique([employeeId, type])
+  @@index([employeeId])
 }

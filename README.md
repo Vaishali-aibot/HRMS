@@ -30,10 +30,16 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   reporting-manager picked from a real employee list rather than free text),
   employee detail/edit page (field edits write to `AuditLog`, status changes
   write to `EmployeeStatusHistory` with a real `previousStatus` — read-only
-  for `MANAGEMENT`, editable for `HR_ADMIN`/`HR_EXECUTIVE`)
+  for `MANAGEMENT`, editable for `HR_ADMIN`/`HR_EXECUTIVE`), user access
+  screen (`HR_ADMIN`-only role assignment, blocks demoting the last admin),
+  onboarding checklists (PRD §10–§11 — one document-status row and one IT
+  setup-task row per employee, created automatically the moment the
+  employee record exists; a dedicated `/dashboard/onboarding` view lists
+  everyone currently pre-boarding/onboarding with checklist progress)
 
-Everything else in the PRD (onboarding workflow, documents, attendance,
-leave, performance, recognition, exits, reports, etc.) is **not built yet**
+Not yet built: actual document **upload/storage** (the document checklist
+tracks status only, no file attached yet — see Known items), attendance,
+leave, performance, recognition, exits, reports, automated reminders, etc.
 — see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested build
 order.
 
@@ -47,16 +53,25 @@ src/
     dashboard/page.tsx            HR metrics dashboard (PRD §6)
     dashboard/employees/page.tsx  Employee Master list (PRD §7)
     dashboard/employees/new/      Add-employee form
-    dashboard/employees/[id]/     Employee detail/edit page + status-change form
+    dashboard/employees/[id]/     Employee detail/edit page, status-change form,
+                                   onboarding document/IT checklist rows
+    dashboard/onboarding/page.tsx Onboarding progress overview (PRD §6/§10/§11)
+    dashboard/users/              HR_ADMIN-only role-assignment screen
     api/auth/[...nextauth]/       Auth.js route handler
   lib/
     auth.ts                       Auth.js config (Entra ID provider, RBAC session)
     prisma.ts                     Prisma Client singleton (driver adapter)
-    rbac.ts                       requireRole()/requireRoleForPage()/requireSession() guards
+    rbac.ts                       requireRole()/requireRoleForPage()/requireSession()
+                                   guards — SERVER-ONLY, see roles.ts
+    roles.ts                      Pure role constants/labels — safe to import from
+                                   "use client" files (rbac.ts is not — see comment)
     safe-redirect.ts              Open-redirect guard for callbackUrl-style params
-    actions/employee.ts           Server Action: create employee (transactional)
+    actions/employee.ts           Server Action: create employee (transactional,
+                                   also seeds onboarding checklists)
     actions/employee-detail.ts    Server Actions: update employee (+ AuditLog),
                                    change lifecycle status (+ EmployeeStatusHistory)
+    actions/onboarding.ts         Server Actions: update document/IT task status
+    actions/user-role.ts          Server Action: change a user's role (+ AuditLog)
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -88,16 +103,17 @@ prisma/
 ### Creating the first HR Admin
 
 Everyone who signs in gets created as `EMPLOYEE` by default (see
-`Role` default in `prisma/schema.prisma`). Promote yourself manually the
-first time:
+`Role` default in `prisma/schema.prisma`). The in-app `/dashboard/users`
+screen (HR_ADMIN-only) can't help with the *first* admin — nobody has that
+role yet — so bootstrap it once via Prisma Studio:
 
 ```bash
 npm run db:studio
 # open the User table, sign in once first so your row exists, set role = HR_ADMIN
 ```
 
-(A proper "invite/assign role" HR Admin screen is a good next build item —
-see roadmap.)
+After that, use `/dashboard/users` in the app for every subsequent role
+change.
 
 ## Auth setup — Microsoft Entra ID (Azure AD)
 
@@ -196,8 +212,22 @@ git push -u origin main
   Fine for a small, HR-curated org chart; revisit if this ever needs to
   scale unsupervised.
 - The `Counter` model (used for atomic, race-free `employeeCode` generation)
-  was added after the initial scaffold. If you already ran a migration
-  before pulling this change, run `npm run db:migrate` again to pick it up.
+  and the onboarding checklist models (`OnboardingDocument`,
+  `ITOnboardingTask`) were added after the initial scaffold. If you already
+  ran a migration before pulling one of these changes, run
+  `npm run db:migrate` again to pick it up.
+- **Client/server module boundary**: `src/lib/rbac.ts` imports `auth.ts` →
+  `prisma.ts` → the `pg` driver, which needs Node built-ins (`tls`, etc.)
+  that don't exist in the browser. A `"use client"` file that imports
+  *anything* from `rbac.ts` — even a pure constant re-exported from it —
+  pulls that whole chain into the client bundle and the build fails with
+  `Module not found: Can't resolve 'tls'`. This actually happened once
+  while building the role-assignment screen. Pure, client-safe role
+  constants/labels live in `src/lib/roles.ts` instead — import from there,
+  never from `rbac.ts`, in any Client Component.
+- Onboarding documents track **status only** — there's no file storage yet
+  (see roadmap: Vercel Blob upload), and there's no automated reminder for
+  pending documents/IT tasks yet (see roadmap: Vercel Cron).
 
 ## Roadmap: remaining PRD modules
 
@@ -205,10 +235,11 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 (§43):
 
 **Next (P0 remainder):**
-1. Role assignment screen (HR Admin invites/promotes users) — currently
-   manual via Prisma Studio.
-2. Onboarding workflow (§10–§11): document checklist, document upload
-   (Vercel Blob), IT checklist, automated reminder cron (Vercel Cron).
+1. Document upload (Vercel Blob) for the onboarding checklist — statuses
+   are already trackable; this adds an actual file behind each
+   `OnboardingDocument` row.
+2. Automated reminders (Vercel Cron + an email provider like Resend) for
+   pending onboarding documents/IT tasks and upcoming probation ends.
 3. Attendance + Leave modules (§13–§15): leave types/balances, apply/approve
    flow, WFH requests.
 4. Probation tracking automation (§16): scheduled job flips status and

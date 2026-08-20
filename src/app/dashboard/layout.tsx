@@ -15,6 +15,7 @@ export default async function DashboardLayout({
   }
 
   const canViewRoster = HR_VIEW_ROLES.includes(session.user.role);
+  const isAdmin = session.user.role === "HR_ADMIN";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -27,6 +28,9 @@ export default async function DashboardLayout({
                 redirect inside the page itself) — don't link non-HR users
                 into a dead end. */}
             {canViewRoster && <Link href="/dashboard/employees">Employees</Link>}
+            {canViewRoster && <Link href="/dashboard/onboarding">Onboarding</Link>}
+            {/* Role assignment is HR_ADMIN-only — see src/lib/actions/user-role.ts */}
+            {isAdmin && <Link href="/dashboard/users">Users</Link>}
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm">
