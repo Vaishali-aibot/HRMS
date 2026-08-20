@@ -156,6 +156,8 @@ model Employee {
   attendanceRecords   AttendanceRecord[]
   attendanceCorrectionRequests AttendanceCorrectionRequest[]
   wfhRequests                  WFHRequest[]
+  exitChecklistItems           ExitChecklistItem[]
+  assignedAssets               Asset[]
 
   // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
   ctcAnnual         Decimal?  @db.Decimal(14, 2)
@@ -432,6 +434,91 @@ model AttendanceCorrectionRequest {
   createdAt       DateTime                   @default(now())
 
   @@index([employeeId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Exit / Separation (PRD §24–§26). initiateExit (src/lib/actions/exit.ts)
+// records resignationDate/noticePeriodDays, computes lastWorkingDay, moves
+// status to NOTICE_PERIOD, and seeds one checklist row per type below — the
+// same "seed everything the moment the transition happens" pattern
+// createEmployee already uses for onboarding.
+//
+// Simplification from the PRD's literal workflow: there's no separate
+// employee-submits-resignation → manager-approves gate before this — HR
+// records the resignation directly (realistic either way, since HR ends
+// up recording it in the system regardless of how the conversation
+// happened). Nothing blocks moving status to EXITED before every checklist
+// item is COMPLETED, either. See README "Known items to revisit".
+// ---------------------------------------------------------------------------
+
+enum ExitChecklistItemType {
+  MANAGER_CONFIRMATION
+  HR_DISCUSSION
+  KNOWLEDGE_TRANSFER
+  ASSET_RETURN
+  ACCESS_REVOCATION
+  CLEARANCE
+  EXIT_INTERVIEW
+  FINAL_SETTLEMENT
+  EXPERIENCE_LETTER
+  RELIEVING_LETTER
+}
+
+enum ExitChecklistItemStatus {
+  PENDING
+  COMPLETED
+}
+
+/// One row per exit checklist step per employee (PRD §24). "Resignation
+/// received" isn't its own row here — initiating the exit at all implies
+/// it, per the simplification noted above.
+model ExitChecklistItem {
+  id            String                  @id @default(cuid())
+  employeeId    String
+  employee      Employee                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type          ExitChecklistItemType
+  status        ExitChecklistItemStatus @default(PENDING)
+  notes         String?
+  completedById String?
+  completedAt   DateTime?
+  createdAt     DateTime                @default(now())
+
+  @@unique([employeeId, type])
+  @@index([employeeId])
+}
+
+// ---------------------------------------------------------------------------
+// Assets (PRD §26). Deliberately minimal — just enough to make the exit
+// checklist's "Asset Return" step real. Issuing during onboarding,
+// damage/condition history, and richer IT-asset tracking are still a
+// separate roadmap item.
+// ---------------------------------------------------------------------------
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  UNDER_REPAIR
+  RETURNED
+  LOST
+  RETIRED
+}
+
+model Asset {
+  id                 String      @id @default(cuid())
+  assetCode          String      @unique // human-readable, e.g. AST-0001
+  type               String // free text, e.g. "Laptop" — org-specific, like Employee.department
+  serialNumber       String?
+  assignedEmployeeId String?
+  assignedEmployee   Employee?   @relation(fields: [assignedEmployeeId], references: [id])
+  condition          String?
+  status             AssetStatus @default(AVAILABLE)
+  issueDate          DateTime?
+  returnDate         DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([assignedEmployeeId])
   @@index([status])
 }
 

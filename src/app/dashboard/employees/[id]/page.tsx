@@ -6,9 +6,13 @@ import { HR_VIEW_ROLES, HR_WRITE_ROLES, requireRoleForPage } from "@/lib/rbac";
 
 import { DocumentRow } from "./document-row";
 import { EditEmployeeForm } from "./edit-employee-form";
+import { ExitChecklistRow } from "./exit-checklist-row";
 import { ExtendProbationForm } from "./extend-probation-form";
+import { InitiateExitForm } from "./initiate-exit-form";
 import { ITTaskRow } from "./it-task-row";
 import { StatusChangeForm } from "./status-change-form";
+
+const ALREADY_EXITING_STATUSES = ["NOTICE_PERIOD", "EXITED", "ALUMNI"];
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
   return (
@@ -36,6 +40,7 @@ export default async function EmployeeDetailPage({
       statusHistory: { orderBy: { changedAt: "desc" } },
       onboardingDocuments: { orderBy: { type: "asc" } },
       itTasks: { orderBy: { type: "asc" } },
+      exitChecklistItems: { orderBy: { type: "asc" } },
     },
   });
 
@@ -137,6 +142,32 @@ export default async function EmployeeDetailPage({
               />
             </div>
           )}
+        </div>
+      )}
+
+      {canEdit && !ALREADY_EXITING_STATUSES.includes(employee.status) && (
+        <InitiateExitForm employeeId={employee.id} />
+      )}
+
+      {employee.status === "NOTICE_PERIOD" && (
+        <div>
+          <h2 className="text-sm font-semibold">Exit checklist (PRD §24)</h2>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            Resigned {employee.resignationDate?.toLocaleDateString(undefined, { timeZone: "UTC" })}
+            {" · "}
+            last working day{" "}
+            {employee.lastWorkingDay?.toLocaleDateString(undefined, { timeZone: "UTC" })}
+          </p>
+          <ul className="mt-2 rounded-xl border border-black/10 dark:border-white/15">
+            {employee.exitChecklistItems.map((item) => (
+              <ExitChecklistRow
+                key={item.id}
+                item={item}
+                employeeId={employee.id}
+                editable={canEdit}
+              />
+            ))}
+          </ul>
         </div>
       )}
 

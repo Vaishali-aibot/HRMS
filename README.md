@@ -69,12 +69,21 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   authorization shape as leave/corrections; an approval writes
   `WORK_FROM_HOME` directly onto every covered `AttendanceRecord` date +
   `AuditLog` entries, so it shows up on the attendance views immediately
-  rather than needing a separate sync step)
+  rather than needing a separate sync step), **exit/separation** (PRD
+  §24–§26 — recording a resignation computes `lastWorkingDay` from
+  `noticePeriodDays`, moves status to `NOTICE_PERIOD`, and seeds an
+  11-item exit checklist the same way onboarding seeds its own; a
+  dedicated `/dashboard/exits` view lists everyone currently in notice
+  period with checklist progress; a deliberately minimal **asset registry**
+  (`/dashboard/assets`) makes the checklist's "Asset Return" step real —
+  register an asset, assign it to an employee, mark it returned)
 
 Not yet built: WFH eligibility/max-days/location-restriction policy (PRD
 §15 configuration — the request/approve mechanics exist, the policy engine
-doesn't), performance, recognition, exits, reports, etc. — see
-[Roadmap](#roadmap-remaining-prd-modules) below for a suggested build order.
+doesn't), a resignation-approval gate before notice period starts (HR
+records it directly instead), performance, recognition, reports, etc. —
+see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested build
+order.
 
 ## Project structure
 
@@ -91,6 +100,8 @@ src/
     dashboard/onboarding/page.tsx Onboarding progress overview (PRD §6/§10/§11)
     dashboard/documents/page.tsx  Self-service: upload my own onboarding documents
     dashboard/wfh/                Work From Home: apply, approve/reject (PRD §15)
+    dashboard/exits/page.tsx      Exit progress overview (PRD §24)
+    dashboard/assets/             HR-only: register/assign/return assets (PRD §26)
     dashboard/leave/              Leave: balances, apply form, approve/reject (PRD §14)
     dashboard/leave-types/        HR-only: add/edit leave types, carry-forward limits
     dashboard/attendance/         Attendance: HR/manager marking, self-check-in,
@@ -133,6 +144,9 @@ src/
                                        an attendance correction (+ AuditLog on approval)
     actions/wfh.ts                Server Actions: request/approve/reject/cancel a WFH
                                    request (approval writes AttendanceRecord + AuditLog)
+    actions/exit.ts                Server Actions: record a resignation (seeds exit
+                                    checklist), update an exit checklist item
+    actions/asset.ts               Server Actions: create/assign/return an asset
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -422,6 +436,17 @@ git push -u origin main
   correction), so approving a WFH request that overlaps a day HR already
   marked ABSENT, for instance, silently replaces that with
   WORK_FROM_HOME — there's no conflict warning shown to the approver yet.
+- **Exit has no resignation-approval gate** — HR records a resignation
+  directly (moving status straight to `NOTICE_PERIOD` and seeding the
+  checklist), rather than an employee submitting one for their manager to
+  approve first (PRD §24's literal first two steps). Nothing blocks moving
+  an employee to `EXITED` before every checklist item is `COMPLETED`
+  either — the checklist is tracking, not a gate.
+- **The asset registry is exit-checklist-minimal, not a full asset
+  management module** — no issuing during onboarding, no damage/condition
+  history beyond the single free-text field captured at return, no
+  reporting. It exists so "Asset Return" in the exit checklist has
+  something real behind it.
 
 ## Roadmap: remaining PRD modules
 
@@ -435,13 +460,12 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 2. WFH policy (PRD §15) — eligibility, max-days limits, location
    restrictions. The request/approve/reflect-in-attendance mechanics exist
    (`/dashboard/wfh`); nothing enforces a policy on top of them yet.
-3. Exit/separation workflow (§24–§26): resignation → checklist → asset
-   return → clearance.
-4. HR Helpdesk (§21): request categories, SLA dashboard.
+3. HR Helpdesk (§21): request categories, SLA dashboard.
 
 **Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
-asset management (§26), integrations (§32) — Outlook/Teams notifications,
-e-signature.
+fuller asset management (§26 — issuing during onboarding, condition/damage
+history, richer IT tracking; today's registry is exit-checklist-minimal),
+integrations (§32) — Outlook/Teams notifications, e-signature.
 
 **Phase 3 (P2):** AI assistant / natural-language HR queries (§40) — a
 good fit for Claude once the data model above is populated.

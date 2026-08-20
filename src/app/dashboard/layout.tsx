@@ -15,7 +15,7 @@ export default async function DashboardLayout({
   }
 
   const canViewRoster = HR_VIEW_ROLES.includes(session.user.role);
-  const canConfigureLeave = HR_WRITE_ROLES.includes(session.user.role);
+  const isHRWrite = HR_WRITE_ROLES.includes(session.user.role);
   const isAdmin = session.user.role === "HR_ADMIN";
 
   return (
@@ -30,12 +30,15 @@ export default async function DashboardLayout({
                 into a dead end. */}
             {canViewRoster && <Link href="/dashboard/employees">Employees</Link>}
             {canViewRoster && <Link href="/dashboard/onboarding">Onboarding</Link>}
+            {canViewRoster && <Link href="/dashboard/exits">Exits</Link>}
+            {/* Asset registry — HR_ADMIN/HR_EXECUTIVE-only, same as leave types */}
+            {isHRWrite && <Link href="/dashboard/assets">Assets</Link>}
             {/* Leave/Attendance/Documents serve everyone — self-service if
                 you're an EMPLOYEE/MANAGER, org-wide management if you're
                 HR/MANAGEMENT. See the respective page.tsx files. */}
             <Link href="/dashboard/leave">Leave</Link>
             {/* Leave type configuration — HR_ADMIN/HR_EXECUTIVE-only */}
-            {canConfigureLeave && <Link href="/dashboard/leave-types">Leave types</Link>}
+            {isHRWrite && <Link href="/dashboard/leave-types">Leave types</Link>}
             <Link href="/dashboard/attendance">Attendance</Link>
             <Link href="/dashboard/wfh">WFH</Link>
             <Link href="/dashboard/documents">Documents</Link>
