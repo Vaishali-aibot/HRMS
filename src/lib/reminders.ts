@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { sendTeamsMessage } from "@/lib/teams";
 import { todayUTC } from "@/lib/date-only";
 
 // Used to build links inside reminder emails. Set this to your real deployed
@@ -220,6 +221,7 @@ export async function sendHRDigest() {
   ) {
     return {
       sent: 0,
+      teamsPosted: false,
       pendingDocs: 0,
       pendingITTasks: 0,
       pendingLeave: 0,
@@ -248,5 +250,29 @@ export async function sendHRDigest() {
     const ok = await sendEmail({ to: admin.email, subject: "HRMS daily summary", html });
     if (ok) sent++;
   }
-  return { sent, pendingDocs, pendingITTasks, pendingLeave, probationMilestones, overdueHRRequests };
+
+  // One post to the shared HR Teams channel (if configured), not one per
+  // admin — a Teams webhook posts to a channel, not a person (PRD §32).
+  const teamsPosted = await sendTeamsMessage({
+    title: "HRMS daily summary",
+    text: [
+      `${pendingDocs} onboarding document(s) awaiting submission/review`,
+      `${pendingITTasks} IT setup task(s) not yet completed`,
+      `${pendingLeave} leave request(s) pending a decision`,
+      `${probationMilestones} employee(s) hitting a 30/15/7-day probation-ending milestone today`,
+      `${overdueHRRequests} HR request(s) open ${HR_REQUEST_OVERDUE_DAYS}+ days`,
+      "",
+      `${APP_URL}/dashboard/requests`,
+    ].join("\n"),
+  });
+
+  return {
+    sent,
+    teamsPosted,
+    pendingDocs,
+    pendingITTasks,
+    pendingLeave,
+    probationMilestones,
+    overdueHRRequests,
+  };
 }

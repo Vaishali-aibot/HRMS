@@ -56,7 +56,9 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   re-upload deletes the file it replaced), **automated reminders** (PRD
   §23 — a daily Vercel Cron job emails each onboarding employee their own
   outstanding documents, each manager their team's pending leave requests,
-  and every `HR_ADMIN` a daily digest), **probation tracking** (PRD §16 —
+  and every `HR_ADMIN` a daily digest — which also posts once to a
+  Microsoft Teams channel, PRD §32, if configured; see "Teams
+  notifications" below), **probation tracking** (PRD §16 —
   `probationEndDate` is calculated automatically from date of joining + a
   probation period at employee creation (90-day default, overridable); HR
   extends it with a required reason (audit-logged) via a dedicated form
@@ -306,11 +308,40 @@ get logged to the console instead of emailed (see `src/lib/email.ts`).
 Vercel's Hobby plan only allows once-per-day cron jobs, so this is the
 right default even if you're on a paid plan and could go more frequent.
 
-I have not run this against a real Resend account or a real Vercel Cron
-invocation — verified against `resend`'s and Vercel's actual documented
-APIs, but genuinely untested end-to-end in this environment. Send yourself
-a test reminder (`curl` the route with the right `Authorization` header)
-before trusting it in production.
+I verified the route's auth check and response shape locally (`curl` with
+the right `Authorization: Bearer <CRON_SECRET>` header returns the
+expected JSON — counts, `sent`, `teamsPosted`), and separately verified
+`sendTeamsMessage`'s HTTP mechanics against a local mock server. I have
+**not** run this against a real Resend account, a real Vercel Cron
+invocation, or an actual Microsoft Teams channel — those still need your
+own verification before trusting this in production.
+
+### Teams notifications (PRD §32)
+
+Optional, and independent of the email setup above — the daily HR digest
+also posts once to a Microsoft Teams channel if `TEAMS_WEBHOOK_URL` is
+set (`src/lib/teams.ts`; logs and no-ops otherwise, same pattern as
+`sendEmail`). A channel webhook posts to a shared channel, not a person,
+so this only covers the broadcast-style digest — there's no per-user
+"your leave was approved" Teams equivalent.
+
+⚠️ **Verify this before relying on it** — Microsoft has been retiring the
+classic "Incoming Webhook" connector (the `MessageCard` JSON format this
+code sends) in favor of "Workflows" (Power Automate-based) webhooks,
+which may want a different payload shape. Which one your tenant currently
+offers may have changed since this was written (past my knowledge
+cutoff) — open your Teams channel's **⋯ → Connectors** or
+**⋯ → Workflows** menu, create a webhook there, and check Microsoft's
+current docs for the expected payload if the `MessageCard` format in
+`sendTeamsMessage` doesn't get accepted.
+
+**Not implemented — Outlook-specific notifications and e-signature**
+(also PRD §32). Outlook is just an email client, so the existing
+Resend-based email already reaches it; there's no separate
+Outlook-specific integration to build beyond that. E-signature
+genuinely needs a third-party vendor (DocuSign, Adobe Sign, etc.) with
+its own API credentials — not something to fake without you choosing a
+vendor and providing real API keys.
 
 ### Creating the first HR Admin
 
@@ -573,8 +604,11 @@ every gap noted against it, is built.
    built: richer IT-asset-specific tracking (warranty, purchase cost,
    vendor) — the `type`/`serialNumber`/`condition` fields stay free text,
    same design tradeoff as `Employee.department`.
-4. Integrations (§32) — Outlook/Teams notifications, e-signature. Email
-   exists (Resend) but nothing else does.
+4. ~~Integrations (§32)~~ — Teams notifications done, see "What's built"
+   above and the "Teams notifications" setup section. Outlook needs no
+   separate integration (email already reaches it); e-signature remains
+   undone — it needs a real third-party vendor and API credentials, not
+   something to fake.
 5. ~~Reports & analytics (§27–§28)~~ — done, see "What's built" above.
 
 **Phase 3 (P2):** AI assistant / natural-language HR queries (§40) — a
