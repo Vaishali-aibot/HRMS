@@ -169,6 +169,26 @@ used - encashed` everywhere that number is shown. No actual payout
 happens (no payroll integration); this only tracks that the days are
 spent and excludes them from carry-forward into next year.
 
+**P2 — AI assistant** (PRD §40 — natural-language HR queries). A chat
+interface at `/dashboard/assistant`, open to everyone, backed by the
+Anthropic API (`claude-sonnet-5`) via a fixed set of **read-only,
+role-checked tool functions** (`src/lib/assistant-tools.ts`) — the model
+never gets raw database or SQL access, only these specific functions,
+each of which checks the caller's role itself before returning anything
+(same defense-in-depth principle as every Server Action in this app).
+Tools cover: your own profile/leave balance/pending requests; for
+managers/HR, pending approvals across your team (or org-wide for HR);
+and for HR/management, org headcount and HR helpdesk volume. **Never
+returned by any tool, regardless of role**: compensation or
+statutory/bank fields — a stricter bar than what a human HR_ADMIN can see
+elsewhere in the app, specifically because this surface hands data to an
+LLM API, a different trust boundary than a page only a signed-in browser
+renders. Conversation history is capped (last 20 turns sent) and the
+tool-use loop is capped (6 iterations) to bound cost/latency; degrades to
+a plain "not configured" chat message if `ANTHROPIC_API_KEY` isn't set,
+same pattern as every other optional integration in this app. See "AI
+assistant" below for setup and what I did/didn't verify.
+
 ## Project structure
 
 ```
@@ -342,6 +362,28 @@ Outlook-specific integration to build beyond that. E-signature
 genuinely needs a third-party vendor (DocuSign, Adobe Sign, etc.) with
 its own API credentials — not something to fake without you choosing a
 vendor and providing real API keys.
+
+### AI assistant (PRD §40)
+
+Optional — `/dashboard/assistant` tells the user it isn't configured
+(rather than erroring) until `ANTHROPIC_API_KEY` is set. Get one at
+[console.anthropic.com](https://console.anthropic.com). Don't also carry
+over an `ANTHROPIC_BASE_URL` from unrelated tooling — the SDK
+(`@anthropic-ai/sdk`) reads it automatically and it would silently
+redirect every request.
+
+The tool functions themselves (`src/lib/assistant-tools.ts`) are ordinary
+Prisma queries — I ran every one of them directly against this
+project's real seeded data (bypassing the model entirely, since no API
+key was available in the environment I built this in) and every result
+matched known-good numbers from manual testing earlier in this project,
+including the RBAC check correctly refusing an org-wide query for an
+`EMPLOYEE`-role caller with a clean error rather than data or a crash.
+I have **not** run an actual conversation through the Anthropic API end
+to end — the tool-use loop in `src/lib/actions/assistant.ts` is built and
+typechecks against the installed SDK's real type definitions (not
+guessed), but you should send yourself a real test question once a key
+is configured before trusting it in production.
 
 ### Creating the first HR Admin
 
@@ -611,8 +653,8 @@ every gap noted against it, is built.
    something to fake.
 5. ~~Reports & analytics (§27–§28)~~ — done, see "What's built" above.
 
-**Phase 3 (P2):** AI assistant / natural-language HR queries (§40) — a
-good fit for Claude once the data model above is populated.
+**Phase 3 (P2):** ~~AI assistant / natural-language HR queries (§40)~~ —
+done, see "What's built" above and the "AI assistant" setup section.
 
 For each new module, follow the same pattern already in this codebase:
 a Prisma model, a `requireRole()`-guarded Server Action, and a page under

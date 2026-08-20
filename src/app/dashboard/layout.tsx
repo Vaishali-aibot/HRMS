@@ -50,6 +50,7 @@ export default async function DashboardLayout({
             <Link href="/dashboard/performance/pip">PIP</Link>
             <Link href="/dashboard/recognition">Recognition</Link>
             <Link href="/dashboard/requests">Requests</Link>
+            <Link href="/dashboard/assistant">Assistant</Link>
             {/* Role assignment is HR_ADMIN-only — see src/lib/actions/user-role.ts */}
             {isAdmin && <Link href="/dashboard/users">Users</Link>}
           </nav>
