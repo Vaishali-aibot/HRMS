@@ -2,6 +2,7 @@ import {
   sendHRDigest,
   sendOnboardingDocumentReminders,
   sendPendingLeaveReminders,
+  sendProbationEndingReminders,
 } from "@/lib/reminders";
 
 /**
@@ -28,11 +29,12 @@ export async function GET(request: Request) {
   // docs on cron idempotency) — this isn't deduped against a "last sent"
   // timestamp, so a double-fire sends duplicate reminder emails. Low
   // stakes for a reminder email; disclosed in the README.
-  const [documents, leave, digest] = await Promise.all([
+  const [documents, leave, probation, digest] = await Promise.all([
     sendOnboardingDocumentReminders(),
     sendPendingLeaveReminders(),
+    sendProbationEndingReminders(),
     sendHRDigest(),
   ]);
 
-  return Response.json({ documents, leave, digest });
+  return Response.json({ documents, leave, probation, digest });
 }

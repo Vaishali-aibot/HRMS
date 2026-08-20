@@ -54,12 +54,18 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   re-upload deletes the file it replaced), **automated reminders** (PRD
   §23 — a daily Vercel Cron job emails each onboarding employee their own
   outstanding documents, each manager their team's pending leave requests,
-  and every `HR_ADMIN` a daily digest — all skipped/logged instead of
-  failing if email isn't configured yet)
+  and every `HR_ADMIN` a daily digest), **probation tracking** (PRD §16 —
+  `probationEndDate` is calculated automatically from date of joining + a
+  probation period at employee creation (90-day default, overridable); HR
+  extends it with a required reason (audit-logged) via a dedicated form
+  that only appears while status is `PROBATION`; confirming (via the
+  existing status-change form) auto-records `confirmationDate` the first
+  time; the reminders cron flags anyone hitting the 30/15/7-day mark today
+  — Vercel's Hobby plan runs cron at most once/day, so exact-day matching
+  is what makes this fire once per milestone instead of daily)
 
 Not yet built: WFH as its own request workflow (folded into attendance's
 `WORK_FROM_HOME` status instead), performance, recognition, exits, reports,
-probation-end reminders (needs probation automation first — see roadmap),
 etc. — see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested
 build order.
 
@@ -104,7 +110,8 @@ src/
     actions/employee.ts           Server Action: create employee (transactional,
                                    also seeds onboarding checklists + leave balances)
     actions/employee-detail.ts    Server Actions: update employee (+ AuditLog),
-                                   change lifecycle status (+ EmployeeStatusHistory)
+                                   change lifecycle status (+ EmployeeStatusHistory,
+                                   auto confirmationDate), extend probation (+ AuditLog)
     actions/onboarding.ts         Server Actions: update document/IT task status,
                                    upload an onboarding document to Vercel Blob
     actions/user-role.ts          Server Actions: change a user's role (+ AuditLog),
@@ -387,6 +394,13 @@ git push -u origin main
   Employee record via `/dashboard/users` — this is manual (HR_ADMIN picks
   from a dropdown), not automatic. Nothing matches by email; there's no
   "work email" field on Employee to match against the SSO email.
+- **Probation has no separate "start date" field** — the schema (and PRD
+  §16) treat `dateOfJoining` as the implicit probation start;
+  `probationEndDate` is just `dateOfJoining + probationPeriodDays`
+  computed once at creation. Existing employees created before this
+  feature landed have `probationEndDate = null` until someone extends
+  probation or edits the record — the reminders job simply won't flag
+  them (no crash, no false positive, just silent until set).
 
 ## Roadmap: remaining PRD modules
 
@@ -394,19 +408,13 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 (§43):
 
 **Next (P0 remainder):**
-1. Probation tracking automation (§16): the cron job/reminders
-   infrastructure now exists (`src/lib/reminders.ts`,
-   `src/app/api/cron/reminders/route.ts`) — add a probation-end check
-   there and a way to actually *set* `probationEndDate` (nothing does
-   today), then flip status via the existing `changeEmployeeStatus` action
-   at 30/15/7 days out.
-2. Leave type management UI (HR can currently only use the 3 seeded
+1. Leave type management UI (HR can currently only use the 3 seeded
    defaults) and carry-forward/accrual (PRD §14).
-3. WFH as its own request workflow (PRD §15) — currently just an attendance
+2. WFH as its own request workflow (PRD §15) — currently just an attendance
    status value, no separate request/approval flow.
-4. Exit/separation workflow (§24–§26): resignation → checklist → asset
+3. Exit/separation workflow (§24–§26): resignation → checklist → asset
    return → clearance.
-5. HR Helpdesk (§21): request categories, SLA dashboard.
+4. HR Helpdesk (§21): request categories, SLA dashboard.
 
 **Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
 asset management (§26), integrations (§32) — Outlook/Teams notifications,

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { todayUTC } from "@/lib/date-only";
 
 // Used to build links inside reminder emails. Set this to your real deployed
 // URL once you have one (a Vercel env var, or NEXT_PUBLIC_APP_URL below) —
@@ -109,19 +110,94 @@ export async function sendPendingLeaveReminders() {
   return { pendingCount: pending.length, managersNotified, skippedNoManagerEmail };
 }
 
+// PRD §16's exact cadence — reminders fire only on these three milestones,
+// not every day probation happens to be outstanding (unlike the document/
+// leave reminders above, which do re-fire daily).
+const PROBATION_REMINDER_DAYS = [30, 15, 7] as const;
+
+/**
+ * One email per manager listing which direct reports hit a 30/15/7-day
+ * probation-ending milestone today. Managers without a linked employee
+ * record/User email are silently skipped (counted, same as the leave
+ * reminder above).
+ */
+export async function sendProbationEndingReminders() {
+  const today = todayUTC();
+  const targetDates = PROBATION_REMINDER_DAYS.map((days) => {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d;
+  });
+
+  const employees = await prisma.employee.findMany({
+    where: { status: "PROBATION", probationEndDate: { in: targetDates } },
+    include: { reportingManager: { include: { user: true } } },
+  });
+
+  const byManagerEmail = new Map<
+    string,
+    { managerName: string; items: { employeeName: string; endDate: Date }[] }
+  >();
+  let skippedNoManagerEmail = 0;
+
+  for (const employee of employees) {
+    const manager = employee.reportingManager;
+    const email = manager?.user?.email;
+    if (!manager || !email || !employee.probationEndDate) {
+      skippedNoManagerEmail++;
+      continue;
+    }
+    const bucket = byManagerEmail.get(email) ?? { managerName: manager.fullName, items: [] };
+    bucket.items.push({ employeeName: employee.fullName, endDate: employee.probationEndDate });
+    byManagerEmail.set(email, bucket);
+  }
+
+  let managersNotified = 0;
+  for (const [email, { managerName, items }] of byManagerEmail) {
+    const list = items
+      .map(
+        (i) =>
+          `<li>${i.employeeName}: probation ends ${i.endDate.toLocaleDateString(undefined, { timeZone: "UTC" })}</li>`
+      )
+      .join("");
+    const ok = await sendEmail({
+      to: email,
+      subject: `Probation ending soon for ${items.length} team member${items.length === 1 ? "" : "s"}`,
+      html: `<p>Hi ${managerName},</p>
+        <ul>${list}</ul>
+        <p>Time for a performance review and a confirm / extend / exit decision.</p>
+        <p><a href="${APP_URL}/dashboard/employees">View employees</a>.</p>`,
+    });
+    if (ok) managersNotified++;
+  }
+
+  return { employeesFlagged: employees.length, managersNotified, skippedNoManagerEmail };
+}
+
 /** One daily summary email per HR_ADMIN, skipped entirely if nothing's pending. */
 export async function sendHRDigest() {
-  const [pendingDocs, pendingITTasks, pendingLeave, hrAdmins] = await Promise.all([
-    prisma.onboardingDocument.count({
-      where: { status: { in: ["NOT_SUBMITTED", "RESUBMISSION_REQUIRED", "SUBMITTED", "UNDER_REVIEW"] } },
-    }),
-    prisma.iTOnboardingTask.count({ where: { status: { in: ["PENDING", "IN_PROGRESS"] } } }),
-    prisma.leaveRequest.count({ where: { status: "PENDING" } }),
-    prisma.user.findMany({ where: { role: "HR_ADMIN" }, select: { email: true } }),
-  ]);
+  const today = todayUTC();
+  const probationTargetDates = PROBATION_REMINDER_DAYS.map((days) => {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d;
+  });
 
-  if (pendingDocs + pendingITTasks + pendingLeave === 0) {
-    return { sent: 0, pendingDocs: 0, pendingITTasks: 0, pendingLeave: 0 };
+  const [pendingDocs, pendingITTasks, pendingLeave, probationMilestones, hrAdmins] =
+    await Promise.all([
+      prisma.onboardingDocument.count({
+        where: { status: { in: ["NOT_SUBMITTED", "RESUBMISSION_REQUIRED", "SUBMITTED", "UNDER_REVIEW"] } },
+      }),
+      prisma.iTOnboardingTask.count({ where: { status: { in: ["PENDING", "IN_PROGRESS"] } } }),
+      prisma.leaveRequest.count({ where: { status: "PENDING" } }),
+      prisma.employee.count({
+        where: { status: "PROBATION", probationEndDate: { in: probationTargetDates } },
+      }),
+      prisma.user.findMany({ where: { role: "HR_ADMIN" }, select: { email: true } }),
+    ]);
+
+  if (pendingDocs + pendingITTasks + pendingLeave + probationMilestones === 0) {
+    return { sent: 0, pendingDocs: 0, pendingITTasks: 0, pendingLeave: 0, probationMilestones: 0 };
   }
 
   const html = `
@@ -130,9 +206,11 @@ export async function sendHRDigest() {
       <li>${pendingDocs} onboarding document(s) awaiting submission/review</li>
       <li>${pendingITTasks} IT setup task(s) not yet completed</li>
       <li>${pendingLeave} leave request(s) pending a decision</li>
+      <li>${probationMilestones} employee(s) hitting a 30/15/7-day probation-ending milestone today</li>
     </ul>
     <p><a href="${APP_URL}/dashboard/onboarding">Onboarding</a> ·
-       <a href="${APP_URL}/dashboard/leave">Leave</a></p>
+       <a href="${APP_URL}/dashboard/leave">Leave</a> ·
+       <a href="${APP_URL}/dashboard/employees">Employees</a></p>
   `;
 
   let sent = 0;
@@ -140,5 +218,5 @@ export async function sendHRDigest() {
     const ok = await sendEmail({ to: admin.email, subject: "HRMS daily summary", html });
     if (ok) sent++;
   }
-  return { sent, pendingDocs, pendingITTasks, pendingLeave };
+  return { sent, pendingDocs, pendingITTasks, pendingLeave, probationMilestones };
 }

@@ -60,6 +60,15 @@ export function NewEmployeeForm({
         <Field label="Date of joining">
           <input name="dateOfJoining" type="date" required className={inputClass} />
         </Field>
+        <Field label="Probation period (days)">
+          <input
+            name="probationPeriodDays"
+            type="number"
+            min={1}
+            placeholder="90 (default)"
+            className={inputClass}
+          />
+        </Field>
         <Field label="Department">
           <input name="department" required className={inputClass} />
         </Field>

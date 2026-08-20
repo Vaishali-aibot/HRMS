@@ -22,7 +22,13 @@ const createEmployeeSchema = z.object({
   // existing employees in the form — never free text. See
   // src/app/dashboard/employees/new/employee-form.tsx.
   reportingManagerId: z.string().optional().or(z.literal("")),
+  // Probation start is implicitly dateOfJoining (PRD §16 — no separate
+  // model field for it); this is just the duration used to calculate
+  // probationEndDate. Blank = the 90-day company default.
+  probationPeriodDays: z.coerce.number().int().positive().optional(),
 });
+
+const DEFAULT_PROBATION_DAYS = 90;
 
 export type CreateEmployeeState = {
   error?: string;
@@ -54,6 +60,7 @@ export async function createEmployee(
     employmentType: formData.get("employmentType"),
     workMode: formData.get("workMode"),
     reportingManagerId: formData.get("reportingManagerId"),
+    probationPeriodDays: formData.get("probationPeriodDays") || undefined,
   });
 
   if (!parsed.success) {
@@ -62,6 +69,11 @@ export async function createEmployee(
 
   const data = parsed.data;
   const reportingManagerId = data.reportingManagerId || undefined;
+  const dateOfJoining = new Date(data.dateOfJoining);
+  const probationEndDate = new Date(dateOfJoining);
+  probationEndDate.setUTCDate(
+    probationEndDate.getUTCDate() + (data.probationPeriodDays ?? DEFAULT_PROBATION_DAYS)
+  );
 
   try {
     if (reportingManagerId) {
@@ -92,7 +104,8 @@ export async function createEmployee(
           employeeCode,
           fullName: data.fullName,
           personalEmail: data.personalEmail || undefined,
-          dateOfJoining: new Date(data.dateOfJoining),
+          dateOfJoining,
+          probationEndDate,
           department: data.department,
           designation: data.designation,
           location: data.location || undefined,

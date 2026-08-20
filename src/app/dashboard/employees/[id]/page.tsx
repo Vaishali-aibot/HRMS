@@ -6,6 +6,7 @@ import { HR_VIEW_ROLES, HR_WRITE_ROLES, requireRoleForPage } from "@/lib/rbac";
 
 import { DocumentRow } from "./document-row";
 import { EditEmployeeForm } from "./edit-employee-form";
+import { ExtendProbationForm } from "./extend-probation-form";
 import { ITTaskRow } from "./it-task-row";
 import { StatusChangeForm } from "./status-change-form";
 
@@ -117,6 +118,26 @@ export default async function EmployeeDetailPage({
 
       {canEdit && (
         <StatusChangeForm employeeId={employee.id} currentStatus={employee.status} />
+      )}
+
+      {employee.status === "PROBATION" && employee.probationEndDate && (
+        <div>
+          <h2 className="text-sm font-semibold">Probation (PRD §16)</h2>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            Ends {employee.probationEndDate.toLocaleDateString(undefined, { timeZone: "UTC" })} —
+            confirm or exit via the status field above, or extend below.
+          </p>
+          {canEdit && (
+            <div className="mt-2">
+              <ExtendProbationForm
+                employeeId={employee.id}
+                currentEndDate={employee.probationEndDate.toLocaleDateString(undefined, {
+                  timeZone: "UTC",
+                })}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">

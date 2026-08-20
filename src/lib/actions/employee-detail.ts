@@ -189,7 +189,7 @@ export async function changeEmployeeStatus(
   try {
     const existing = await prisma.employee.findUnique({
       where: { id: employeeId },
-      select: { status: true },
+      select: { status: true, confirmationDate: true },
     });
     if (!existing) {
       return { error: "Employee not found." };
@@ -199,7 +199,18 @@ export async function changeEmployeeStatus(
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.employee.update({ where: { id: employeeId }, data: { status: newStatus } });
+      await tx.employee.update({
+        where: { id: employeeId },
+        data: {
+          status: newStatus,
+          // PRD §16: HR should be able to record a confirmation date.
+          // Set once, automatically, the first time status becomes
+          // CONFIRMED — don't overwrite it on a later status change.
+          ...(newStatus === "CONFIRMED" && !existing.confirmationDate
+            ? { confirmationDate: new Date() }
+            : {}),
+        },
+      });
       await tx.employeeStatusHistory.create({
         data: {
           employeeId,
@@ -217,5 +228,83 @@ export async function changeEmployeeStatus(
 
   revalidatePath(`/dashboard/employees/${employeeId}`);
   revalidatePath("/dashboard/employees");
+  redirect(`/dashboard/employees/${employeeId}`);
+}
+
+const extendProbationSchema = z.object({
+  employeeId: z.string().min(1),
+  newProbationEndDate: z.string().min(1, "New probation end date is required"),
+  reason: z.string().min(1, "Please explain why probation is being extended"),
+});
+
+export type ExtendProbationState = { error?: string };
+
+/**
+ * PRD §16's "Extend" outcome. Deliberately separate from updateEmployee —
+ * a probation extension always needs a reason on record, unlike a normal
+ * field edit, and it doesn't change employment status (still PROBATION),
+ * so changeEmployeeStatus/EmployeeStatusHistory isn't the right fit either.
+ * AuditLog is: same mechanism as any other field-level change.
+ */
+export async function extendProbation(
+  _prevState: ExtendProbationState,
+  formData: FormData
+): Promise<ExtendProbationState> {
+  let session;
+  try {
+    session = await requireRole(...HR_WRITE_ROLES);
+  } catch {
+    return { error: "You do not have permission to perform this action." };
+  }
+
+  const parsed = extendProbationSchema.safeParse({
+    employeeId: formData.get("employeeId"),
+    newProbationEndDate: formData.get("newProbationEndDate"),
+    reason: formData.get("reason"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { employeeId, reason } = parsed.data;
+  const newProbationEndDate = new Date(parsed.data.newProbationEndDate);
+
+  try {
+    const existing = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { status: true, probationEndDate: true },
+    });
+    if (!existing) {
+      return { error: "Employee not found." };
+    }
+    if (existing.status !== "PROBATION") {
+      return { error: "Only an employee currently on probation can have it extended." };
+    }
+    if (existing.probationEndDate && newProbationEndDate <= existing.probationEndDate) {
+      return { error: "The new date must be after the current probation end date." };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.employee.update({
+        where: { id: employeeId },
+        data: { probationEndDate: newProbationEndDate },
+      });
+      await tx.auditLog.create({
+        data: {
+          entityType: "Employee",
+          entityId: employeeId,
+          field: "probationEndDate",
+          oldValue: existing.probationEndDate?.toISOString() ?? null,
+          newValue: newProbationEndDate.toISOString(),
+          reason,
+          changedById: session.user.id,
+        },
+      });
+    });
+  } catch (err) {
+    console.error("extendProbation failed:", err);
+    return { error: "Something went wrong. Please try again." };
+  }
+
+  revalidatePath(`/dashboard/employees/${employeeId}`);
   redirect(`/dashboard/employees/${employeeId}`);
 }
