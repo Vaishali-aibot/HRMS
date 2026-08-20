@@ -90,7 +90,7 @@ max-days/location-restriction policy (PRD §15 configuration — the
 request/approve mechanics exist, the policy engine doesn't), a
 resignation-approval gate before notice period starts (HR records it
 directly instead), a comment thread on HR requests (one description +
-one resolution note, not a conversation), recognition, reports, etc. — see
+one resolution note, not a conversation), reports, etc. — see
 [Roadmap](#roadmap-remaining-prd-modules) below.
 
 **P1 — performance management** (PRD §17–§18 — goal setting, self/manager
@@ -115,6 +115,19 @@ their own PIPs read-only. Not implemented: multi-level approval chains,
 calibration across managers, a fixed rating scale enforced org-wide (it's
 1-5 everywhere here), and goal weights aren't validated to sum to 100 —
 the UI surfaces the number, nothing enforces it.
+
+**P1 — employee recognition** (PRD §19 — peer/manager recognition with
+categories and points). *Same caveat as performance management above: the
+exact PRD §19 wording wasn't available, so the categories, the 1-100 point
+range, and an org-wide-visible feed are a reasonable standard design, not a
+literal transcription.* Any employee can recognize any other employee (not
+themselves) at `/dashboard/recognition` — pick a category, 1-100 points,
+and a message. Every recognition is visible to everyone (a private/
+manager-only mode isn't implemented) alongside an all-time top-recognized
+leaderboard (`Recognition.points` summed per recipient). The giver can
+retract their own post; HR can moderate/remove anyone's. Points aren't
+tied to any budget or redemption system — it's a running "how recognized
+is this person" signal, not a spendable currency.
 
 ## Project structure
 
@@ -518,8 +531,7 @@ What's left, grouped roughly by the PRD's own priority framework:
 
 **Next (P1):**
 1. ~~Performance cycles + PIP (§17–§18)~~ — done, see "What's built" above.
-2. Employee recognition (§19) — peer/manager recognition with categories
-   and points. No data model or pages exist yet.
+2. ~~Employee recognition (§19)~~ — done, see "What's built" above.
 3. Fuller asset management (§26) — issuing during onboarding, condition/
    damage history, richer IT tracking; today's registry is
    exit-checklist-minimal.

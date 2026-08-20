@@ -162,6 +162,8 @@ model Employee {
   goals                        Goal[]
   performanceReviews           PerformanceReview[]
   performanceImprovementPlans  PerformanceImprovementPlan[]
+  recognitionsGiven            Recognition[]                 @relation("RecognitionsGiven")
+  recognitionsReceived         Recognition[]                 @relation("RecognitionsReceived")
 
   // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
   ctcAnnual Decimal? @db.Decimal(14, 2)
@@ -741,4 +743,40 @@ model PIPCheckIn {
   createdAt   DateTime                   @default(now())
 
   @@index([pipId])
+}
+
+// ---------------------------------------------------------------------------
+// Employee recognition (PRD §19: peer/manager recognition with categories
+// and points). Exact PRD §19 wording wasn't available while building this
+// (only the roadmap's one-line summary) — categories, the 1-100 point
+// range, and the org-wide-visible feed are a reasonable standard design,
+// not a literal transcription. Flag any mismatch with your actual PRD text.
+// ---------------------------------------------------------------------------
+
+enum RecognitionCategory {
+  TEAMWORK
+  INNOVATION
+  CUSTOMER_FOCUS
+  LEADERSHIP
+  GOING_ABOVE_AND_BEYOND
+  OTHER
+}
+
+/// One peer-or-manager recognition, visible org-wide (celebrating people is
+/// the point). Points aren't tied to any budget/redemption system — the
+/// point total here is just a running "how recognized is this person"
+/// signal (PRD §19's "points"), not a spendable currency.
+model Recognition {
+  id             String              @id @default(cuid())
+  fromEmployeeId String
+  fromEmployee   Employee            @relation("RecognitionsGiven", fields: [fromEmployeeId], references: [id], onDelete: Cascade)
+  toEmployeeId   String
+  toEmployee     Employee            @relation("RecognitionsReceived", fields: [toEmployeeId], references: [id], onDelete: Cascade)
+  category       RecognitionCategory
+  points         Int                 @default(10)
+  message        String
+  createdAt      DateTime            @default(now())
+
+  @@index([toEmployeeId])
+  @@index([fromEmployeeId])
 }
