@@ -111,57 +111,60 @@ enum WorkMode {
 
 /// Single source of truth for employee data (PRD §7).
 model Employee {
-  id             String  @id @default(cuid())
-  employeeCode   String  @unique // human-readable Employee ID, e.g. EMP-0001
+  id           String @id @default(cuid())
+  employeeCode String @unique // human-readable Employee ID, e.g. EMP-0001
 
   // Optional link to a login identity — set once the person signs in via SSO.
   userId String? @unique
   user   User?   @relation(fields: [userId], references: [id])
 
   // --- Personal information ---
-  fullName         String
-  preferredName    String?
-  dateOfBirth      DateTime?
-  gender           String?
-  personalEmail    String?
-  personalPhone    String?
-  currentAddress   String?
-  permanentAddress String?
+  fullName              String
+  preferredName         String?
+  dateOfBirth           DateTime?
+  gender                String?
+  personalEmail         String?
+  personalPhone         String?
+  currentAddress        String?
+  permanentAddress      String?
   emergencyContactName  String?
   emergencyContactPhone String?
 
   // --- Employment information ---
-  dateOfJoining     DateTime
-  department        String
-  designation       String
-  location          String?
-  employmentType    EmploymentType   @default(FULL_TIME)
-  workMode          WorkMode         @default(ON_SITE)
+  dateOfJoining      DateTime
+  department         String
+  designation        String
+  location           String?
+  employmentType     EmploymentType @default(FULL_TIME)
+  workMode           WorkMode       @default(ON_SITE)
   reportingManagerId String?
-  reportingManager   Employee?       @relation("ManagerReports", fields: [reportingManagerId], references: [id])
-  directReports      Employee[]      @relation("ManagerReports")
+  reportingManager   Employee?      @relation("ManagerReports", fields: [reportingManagerId], references: [id])
+  directReports      Employee[]     @relation("ManagerReports")
 
-  probationEndDate  DateTime?
-  confirmationDate  DateTime?
-  noticePeriodDays  Int?
-  resignationDate   DateTime?
-  lastWorkingDay    DateTime?
+  probationEndDate DateTime?
+  confirmationDate DateTime?
+  noticePeriodDays Int?
+  resignationDate  DateTime?
+  lastWorkingDay   DateTime?
 
-  status            EmploymentStatus @default(PRE_BOARDING)
-  statusHistory     EmployeeStatusHistory[]
-  onboardingDocuments OnboardingDocument[]
-  itTasks             ITOnboardingTask[]
-  leaveBalances       LeaveBalance[]
-  leaveRequests       LeaveRequest[]
-  attendanceRecords   AttendanceRecord[]
+  status                       EmploymentStatus              @default(PRE_BOARDING)
+  statusHistory                EmployeeStatusHistory[]
+  onboardingDocuments          OnboardingDocument[]
+  itTasks                      ITOnboardingTask[]
+  leaveBalances                LeaveBalance[]
+  leaveRequests                LeaveRequest[]
+  attendanceRecords            AttendanceRecord[]
   attendanceCorrectionRequests AttendanceCorrectionRequest[]
   wfhRequests                  WFHRequest[]
   exitChecklistItems           ExitChecklistItem[]
   assignedAssets               Asset[]
   hrRequests                   HRRequest[]
+  goals                        Goal[]
+  performanceReviews           PerformanceReview[]
+  performanceImprovementPlans  PerformanceImprovementPlan[]
 
   // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
-  ctcAnnual         Decimal?  @db.Decimal(14, 2)
+  ctcAnnual Decimal? @db.Decimal(14, 2)
 
   // --- Bank / statutory (restricted) ---
   panNumber         String?
@@ -180,14 +183,14 @@ model Employee {
 
 /// Every lifecycle status change, with who/when/why (PRD §8, §31).
 model EmployeeStatusHistory {
-  id            String            @id @default(cuid())
-  employeeId    String
-  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id             String            @id @default(cuid())
+  employeeId     String
+  employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   previousStatus EmploymentStatus?
-  newStatus     EmploymentStatus
-  reason        String?
-  changedById   String? // User.id of the HR user who made the change
-  changedAt     DateTime          @default(now())
+  newStatus      EmploymentStatus
+  reason         String?
+  changedById    String? // User.id of the HR user who made the change
+  changedAt      DateTime          @default(now())
 
   @@index([employeeId])
 }
@@ -196,15 +199,15 @@ model EmployeeStatusHistory {
 /// e.g. "Employee" (field edits) or "User" (role changes) — see
 /// src/lib/actions/employee-detail.ts and src/lib/actions/user-role.ts.
 model AuditLog {
-  id         String   @id @default(cuid())
-  entityType String   // e.g. "Employee"
-  entityId   String
-  field      String
-  oldValue   String?
-  newValue   String?
-  reason     String?
+  id          String   @id @default(cuid())
+  entityType  String // e.g. "Employee"
+  entityId    String
+  field       String
+  oldValue    String?
+  newValue    String?
+  reason      String?
   changedById String?
-  changedAt  DateTime @default(now())
+  changedAt   DateTime @default(now())
 
   @@index([entityType, entityId])
 }
@@ -265,8 +268,8 @@ model OnboardingDocument {
   uploadedById String? // User.id — the employee themselves, or HR on their behalf
   uploadedAt   DateTime?
 
-  updatedAt  DateTime       @updatedAt
-  createdAt  DateTime       @default(now())
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 
   @@unique([employeeId, type])
   @@index([employeeId])
@@ -315,13 +318,13 @@ model ITOnboardingTask {
 /// Seeded with 3 defaults the first time an employee is created (see
 /// src/lib/actions/employee.ts).
 model LeaveType {
-  id                String  @id @default(cuid())
-  name              String  @unique
+  id                String   @id @default(cuid())
+  name              String   @unique
   annualDays        Float
   /// Max unused days that carry into next year's balance. 0 = none (the
   /// default for the 3 seeded types, preserving prior behavior).
-  carryForwardLimit Float   @default(0)
-  isActive          Boolean @default(true)
+  carryForwardLimit Float    @default(0)
+  isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
 
   balances LeaveBalance[]
@@ -392,15 +395,15 @@ enum AttendanceStatus {
 /// of the calendar day (same convention as Employee.dateOfJoining) — always
 /// format for display with an explicit UTC timeZone.
 model AttendanceRecord {
-  id           String           @id @default(cuid())
-  employeeId   String
-  employee     Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  date         DateTime
-  status       AttendanceStatus
-  notes        String?
-  markedById   String? // User.id of the HR user who set this
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id         String           @id @default(cuid())
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  status     AttendanceStatus
+  notes      String?
+  markedById String? // User.id of the HR user who set this
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
   @@unique([employeeId, date])
   @@index([employeeId])
@@ -603,4 +606,139 @@ model HRRequest {
 
   @@index([employeeId])
   @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Performance management (PRD §17–§18: goal setting, self/manager reviews,
+// ratings, and performance improvement plans). The exact PRD §17–§18 wording
+// wasn't available while building this (only the roadmap's one-line
+// summary in README) — this is a reasonable, standard performance-cycle +
+// PIP design consistent with the rest of this schema, not a literal
+// transcription of the PRD. Flag any mismatch with your actual PRD text.
+// ---------------------------------------------------------------------------
+
+enum PerformanceCycleStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+/// A review period (e.g. "H1 2026", "Annual 2026"), managed by HR at
+/// /dashboard/performance. Goals and reviews only exist within one of these.
+model PerformanceCycle {
+  id                   String                 @id @default(cuid())
+  name                 String                 @unique
+  startDate            DateTime
+  endDate              DateTime
+  selfReviewDueDate    DateTime?
+  managerReviewDueDate DateTime?
+  status               PerformanceCycleStatus @default(DRAFT)
+  createdAt            DateTime               @default(now())
+
+  goals   Goal[]
+  reviews PerformanceReview[]
+
+  @@index([status])
+}
+
+enum GoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// One goal an employee is working toward within a cycle. `weight` is a
+/// convention (intended to sum to ~100 across an employee's goals in a
+/// cycle) that the UI surfaces but doesn't enforce.
+model Goal {
+  id            String           @id @default(cuid())
+  employeeId    String
+  employee      Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycleId       String
+  cycle         PerformanceCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  weight        Float            @default(0)
+  status        GoalStatus       @default(NOT_STARTED)
+  selfRating    Int? // 1-5, set when the employee submits their self-review
+  managerRating Int? // 1-5, set when the manager submits their review
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([employeeId])
+  @@index([cycleId])
+}
+
+enum PerformanceReviewStatus {
+  NOT_STARTED
+  SELF_REVIEW
+  MANAGER_REVIEW
+  COMPLETED
+}
+
+/// One row per employee per cycle, tracking the self-review → manager-review
+/// workflow. Created lazily the first time an employee or their manager
+/// touches a cycle (mirrors ensureLeaveBalance's lazy-create pattern).
+model PerformanceReview {
+  id                   String                  @id @default(cuid())
+  employeeId           String
+  employee             Employee                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycleId              String
+  cycle                PerformanceCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  reviewerId           String? // User.id of the manager who submitted the review
+  status               PerformanceReviewStatus @default(NOT_STARTED)
+  selfComments         String?
+  selfSubmittedAt      DateTime?
+  managerComments      String?
+  managerOverallRating Int? // 1-5
+  managerSubmittedAt   DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@unique([employeeId, cycleId])
+  @@index([employeeId])
+  @@index([cycleId])
+}
+
+enum PIPStatus {
+  ACTIVE
+  COMPLETED_SUCCESS
+  COMPLETED_FAILURE
+  CANCELLED
+}
+
+/// A performance improvement plan — independent of review cycles, since a
+/// PIP can be initiated at any time. `goals` is free text (the specific
+/// expectations/targets), not a link to the Goal model above.
+model PerformanceImprovementPlan {
+  id            String    @id @default(cuid())
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  initiatedById String? // User.id
+  reason        String
+  goals         String
+  startDate     DateTime
+  endDate       DateTime
+  status        PIPStatus @default(ACTIVE)
+  outcomeNotes  String?
+  closedById    String? // User.id
+  closedAt      DateTime?
+  createdAt     DateTime  @default(now())
+
+  checkIns PIPCheckIn[]
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+/// A periodic progress note logged against an active PIP.
+model PIPCheckIn {
+  id          String                     @id @default(cuid())
+  pipId       String
+  pip         PerformanceImprovementPlan @relation(fields: [pipId], references: [id], onDelete: Cascade)
+  note        String
+  createdById String? // User.id
+  createdAt   DateTime                   @default(now())
+
+  @@index([pipId])
 }

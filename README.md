@@ -90,8 +90,31 @@ max-days/location-restriction policy (PRD §15 configuration — the
 request/approve mechanics exist, the policy engine doesn't), a
 resignation-approval gate before notice period starts (HR records it
 directly instead), a comment thread on HR requests (one description +
-one resolution note, not a conversation), performance, recognition,
-reports, etc. — see [Roadmap](#roadmap-remaining-prd-modules) below.
+one resolution note, not a conversation), recognition, reports, etc. — see
+[Roadmap](#roadmap-remaining-prd-modules) below.
+
+**P1 — performance management** (PRD §17–§18 — goal setting, self/manager
+reviews, ratings, performance improvement plans). *The exact PRD §17–§18
+wording wasn't available while building this — only the roadmap's own
+one-line summary — so this is a reasonable, standard design consistent with
+the rest of the schema, not a literal transcription. Check it against your
+actual PRD text.* HR creates named review cycles
+(`/dashboard/performance`) and moves them `DRAFT → ACTIVE → CLOSED` (no
+enforced ordering, same permissive pattern as `LeaveType.isActive`); while a
+cycle is `ACTIVE`, an employee (or their manager/HR) sets goals with an
+optional weight, tracks each goal's progress themselves, then submits a
+self-review that rates every goal 1-5 and locks the goal *definitions*
+(progress tracking stays open). That hands the review to the employee's
+manager (or HR, as a backup — same `isHR || isManager` pattern used
+everywhere else in this codebase), who rates each goal, gives an overall
+rating + comments, and completes it. Separately, **performance improvement
+plans** (`/dashboard/performance/pip`) are independent of cycles — HR or a
+manager can start one for their own reports at any time, log check-in
+notes, and close it out as success/failure/cancelled; the employee sees
+their own PIPs read-only. Not implemented: multi-level approval chains,
+calibration across managers, a fixed rating scale enforced org-wide (it's
+1-5 everywhere here), and goal weights aren't validated to sum to 100 —
+the UI surfaces the number, nothing enforces it.
 
 ## Project structure
 
@@ -336,6 +359,21 @@ git push -u origin main
 
 ## Known items to revisit
 
+- A row-editing pattern used throughout this app (an uncontrolled `<select>`/
+  `<input>` with `defaultValue`/`defaultChecked`, saved via a Server Action,
+  re-rendered via `revalidatePath`) doesn't visually reflect a just-saved
+  value unless the row is keyed on that value — otherwise React reuses the
+  same DOM node and the field keeps showing what was on screen before Save,
+  even though the database is correctly updated. Fixed with a
+  value-inclusive `key` on `/dashboard/performance`'s `CycleRow`/`GoalRow`
+  (see the comments there); **not checked or fixed** on the equivalent
+  existing rows in `/dashboard/leave-types` (`LeaveTypeRow`) or
+  `/dashboard/assets` (`AssetRow`), which may have the same stale-display
+  quirk after a save.
+- HR requests: "Withdraw" (`cancelHRRequest`) stays available even after HR
+  has marked a request `RESOLVED` — the action only blocks `CLOSED`. May be
+  intentional (an employee can still withdraw after resolution), may not be
+  — noticed during testing, not changed.
 - `npm audit` currently flags a **high severity** transitive advisory in
   `deepmerge-ts` (pulled in by `@prisma/config`) — every current Prisma 7.x
   release is affected; the only fix `npm audit fix --force` offers is a
@@ -479,8 +517,7 @@ What's left, grouped roughly by the PRD's own priority framework:
    literal first two steps) — HR records the resignation directly today.
 
 **Next (P1):**
-1. Performance cycles + PIP (§17–§18) — goal setting, reviews, ratings,
-   performance improvement plans. No data model or pages exist yet.
+1. ~~Performance cycles + PIP (§17–§18)~~ — done, see "What's built" above.
 2. Employee recognition (§19) — peer/manager recognition with categories
    and points. No data model or pages exist yet.
 3. Fuller asset management (§26) — issuing during onboarding, condition/
