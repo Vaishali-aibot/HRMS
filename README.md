@@ -76,14 +76,22 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   dedicated `/dashboard/exits` view lists everyone currently in notice
   period with checklist progress; a deliberately minimal **asset registry**
   (`/dashboard/assets`) makes the checklist's "Asset Return" step real —
-  register an asset, assign it to an employee, mark it returned)
+  register an asset, assign it to an employee, mark it returned), **HR
+  helpdesk** (PRD §21 — employees submit categorized requests, HR assigns/
+  progresses them through Submitted → Assigned → In Progress → Resolved →
+  Closed with a resolution note, `/dashboard/requests` shows an
+  open-by-status count plus every open request with how many days it's
+  been open; anything open 3+ days is visually flagged and rolled into the
+  daily HR digest email — not a configurable SLA policy, just a fixed
+  visibility threshold)
 
-Not yet built: WFH eligibility/max-days/location-restriction policy (PRD
-§15 configuration — the request/approve mechanics exist, the policy engine
-doesn't), a resignation-approval gate before notice period starts (HR
-records it directly instead), performance, recognition, reports, etc. —
-see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested build
-order.
+This completes the PRD's own P0 list (§43). Not yet built: WFH eligibility/
+max-days/location-restriction policy (PRD §15 configuration — the
+request/approve mechanics exist, the policy engine doesn't), a
+resignation-approval gate before notice period starts (HR records it
+directly instead), a comment thread on HR requests (one description +
+one resolution note, not a conversation), performance, recognition,
+reports, etc. — see [Roadmap](#roadmap-remaining-prd-modules) below.
 
 ## Project structure
 
@@ -102,6 +110,7 @@ src/
     dashboard/wfh/                Work From Home: apply, approve/reject (PRD §15)
     dashboard/exits/page.tsx      Exit progress overview (PRD §24)
     dashboard/assets/             HR-only: register/assign/return assets (PRD §26)
+    dashboard/requests/           HR helpdesk: submit/track requests, SLA view (PRD §21)
     dashboard/leave/              Leave: balances, apply form, approve/reject (PRD §14)
     dashboard/leave-types/        HR-only: add/edit leave types, carry-forward limits
     dashboard/attendance/         Attendance: HR/manager marking, self-check-in,
@@ -147,6 +156,7 @@ src/
     actions/exit.ts                Server Actions: record a resignation (seeds exit
                                     checklist), update an exit checklist item
     actions/asset.ts               Server Actions: create/assign/return an asset
+    actions/hr-request.ts          Server Actions: submit/update-status/cancel an HR request
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -447,25 +457,41 @@ git push -u origin main
   history beyond the single free-text field captured at return, no
   reporting. It exists so "Asset Return" in the exit checklist has
   something real behind it.
+- **HR requests have no comment thread and no configurable SLA policy** —
+  one description at submission, one resolution note at close, not a
+  running conversation; the "overdue" flag on `/dashboard/requests` and in
+  the HR digest is a fixed 3-day threshold (`HR_REQUEST_OVERDUE_DAYS`),
+  not a per-category target HR can configure.
 
 ## Roadmap: remaining PRD modules
 
-Suggested build order, grouped roughly by the PRD's own priority framework
-(§43):
+Every module in the PRD's own P0 list (§43) now has a first pass built.
+What's left, grouped roughly by the PRD's own priority framework:
 
-**Next (P0 remainder):**
+**Loose ends on P0 modules (small, not full modules of their own):**
 1. Leave accrual/encashment (PRD §14) — carry-forward and type management
    now exist; accrual (earn-over-time rather than a lump sum on Jan 1) and
    encashment (cash out unused days) don't.
 2. WFH policy (PRD §15) — eligibility, max-days limits, location
    restrictions. The request/approve/reflect-in-attendance mechanics exist
    (`/dashboard/wfh`); nothing enforces a policy on top of them yet.
-3. HR Helpdesk (§21): request categories, SLA dashboard.
+3. A resignation-approval gate before notice period starts (PRD §24's
+   literal first two steps) — HR records the resignation directly today.
 
-**Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
-fuller asset management (§26 — issuing during onboarding, condition/damage
-history, richer IT tracking; today's registry is exit-checklist-minimal),
-integrations (§32) — Outlook/Teams notifications, e-signature.
+**Next (P1):**
+1. Performance cycles + PIP (§17–§18) — goal setting, reviews, ratings,
+   performance improvement plans. No data model or pages exist yet.
+2. Employee recognition (§19) — peer/manager recognition with categories
+   and points. No data model or pages exist yet.
+3. Fuller asset management (§26) — issuing during onboarding, condition/
+   damage history, richer IT tracking; today's registry is
+   exit-checklist-minimal.
+4. Integrations (§32) — Outlook/Teams notifications, e-signature. Email
+   exists (Resend) but nothing else does.
+5. Reports & analytics (§27–§28) — the PRD wants dedicated report views
+   and a management analytics dashboard; today's numbers are scattered
+   across each module's own page (dashboard stats, onboarding/exits
+   overviews) rather than a proper reporting section.
 
 **Phase 3 (P2):** AI assistant / natural-language HR queries (§40) — a
 good fit for Claude once the data model above is populated.

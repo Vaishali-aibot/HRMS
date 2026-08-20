@@ -174,6 +174,10 @@ export async function sendProbationEndingReminders() {
   return { employeesFlagged: employees.length, managersNotified, skippedNoManagerEmail };
 }
 
+// Matches the "overdue" cue on /dashboard/requests — not a configurable
+// SLA policy, just a fixed visibility threshold.
+const HR_REQUEST_OVERDUE_DAYS = 3;
+
 /** One daily summary email per HR_ADMIN, skipped entirely if nothing's pending. */
 export async function sendHRDigest() {
   const today = todayUTC();
@@ -182,22 +186,46 @@ export async function sendHRDigest() {
     d.setUTCDate(d.getUTCDate() + days);
     return d;
   });
+  const overdueThreshold = new Date(today);
+  overdueThreshold.setUTCDate(overdueThreshold.getUTCDate() - HR_REQUEST_OVERDUE_DAYS);
 
-  const [pendingDocs, pendingITTasks, pendingLeave, probationMilestones, hrAdmins] =
-    await Promise.all([
-      prisma.onboardingDocument.count({
-        where: { status: { in: ["NOT_SUBMITTED", "RESUBMISSION_REQUIRED", "SUBMITTED", "UNDER_REVIEW"] } },
-      }),
-      prisma.iTOnboardingTask.count({ where: { status: { in: ["PENDING", "IN_PROGRESS"] } } }),
-      prisma.leaveRequest.count({ where: { status: "PENDING" } }),
-      prisma.employee.count({
-        where: { status: "PROBATION", probationEndDate: { in: probationTargetDates } },
-      }),
-      prisma.user.findMany({ where: { role: "HR_ADMIN" }, select: { email: true } }),
-    ]);
+  const [
+    pendingDocs,
+    pendingITTasks,
+    pendingLeave,
+    probationMilestones,
+    overdueHRRequests,
+    hrAdmins,
+  ] = await Promise.all([
+    prisma.onboardingDocument.count({
+      where: { status: { in: ["NOT_SUBMITTED", "RESUBMISSION_REQUIRED", "SUBMITTED", "UNDER_REVIEW"] } },
+    }),
+    prisma.iTOnboardingTask.count({ where: { status: { in: ["PENDING", "IN_PROGRESS"] } } }),
+    prisma.leaveRequest.count({ where: { status: "PENDING" } }),
+    prisma.employee.count({
+      where: { status: "PROBATION", probationEndDate: { in: probationTargetDates } },
+    }),
+    prisma.hRRequest.count({
+      where: {
+        status: { notIn: ["RESOLVED", "CLOSED"] },
+        createdAt: { lte: overdueThreshold },
+      },
+    }),
+    prisma.user.findMany({ where: { role: "HR_ADMIN" }, select: { email: true } }),
+  ]);
 
-  if (pendingDocs + pendingITTasks + pendingLeave + probationMilestones === 0) {
-    return { sent: 0, pendingDocs: 0, pendingITTasks: 0, pendingLeave: 0, probationMilestones: 0 };
+  if (
+    pendingDocs + pendingITTasks + pendingLeave + probationMilestones + overdueHRRequests ===
+    0
+  ) {
+    return {
+      sent: 0,
+      pendingDocs: 0,
+      pendingITTasks: 0,
+      pendingLeave: 0,
+      probationMilestones: 0,
+      overdueHRRequests: 0,
+    };
   }
 
   const html = `
@@ -207,10 +235,12 @@ export async function sendHRDigest() {
       <li>${pendingITTasks} IT setup task(s) not yet completed</li>
       <li>${pendingLeave} leave request(s) pending a decision</li>
       <li>${probationMilestones} employee(s) hitting a 30/15/7-day probation-ending milestone today</li>
+      <li>${overdueHRRequests} HR request(s) open ${HR_REQUEST_OVERDUE_DAYS}+ days</li>
     </ul>
     <p><a href="${APP_URL}/dashboard/onboarding">Onboarding</a> ·
        <a href="${APP_URL}/dashboard/leave">Leave</a> ·
-       <a href="${APP_URL}/dashboard/employees">Employees</a></p>
+       <a href="${APP_URL}/dashboard/employees">Employees</a> ·
+       <a href="${APP_URL}/dashboard/requests">Requests</a></p>
   `;
 
   let sent = 0;
@@ -218,5 +248,5 @@ export async function sendHRDigest() {
     const ok = await sendEmail({ to: admin.email, subject: "HRMS daily summary", html });
     if (ok) sent++;
   }
-  return { sent, pendingDocs, pendingITTasks, pendingLeave, probationMilestones };
+  return { sent, pendingDocs, pendingITTasks, pendingLeave, probationMilestones, overdueHRRequests };
 }

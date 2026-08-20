@@ -158,6 +158,7 @@ model Employee {
   wfhRequests                  WFHRequest[]
   exitChecklistItems           ExitChecklistItem[]
   assignedAssets               Asset[]
+  hrRequests                   HRRequest[]
 
   // --- Compensation (restricted — enforce in query layer, PRD §7/§30) ---
   ctcAnnual         Decimal?  @db.Decimal(14, 2)
@@ -553,6 +554,52 @@ model WFHRequest {
   decidedAt      DateTime?
   decisionReason String?
   createdAt      DateTime         @default(now())
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// HR Helpdesk (PRD §21). No comment thread — a request is one description
+// plus one resolution note, not a running conversation. No configurable
+// SLA policy either; "SLA visibility" here is just "how many days has this
+// been open", surfaced in the UI, not a per-category target with alerts.
+// ---------------------------------------------------------------------------
+
+enum HRRequestCategory {
+  LEAVE
+  ATTENDANCE
+  SALARY_DOCUMENTS
+  EMPLOYMENT_LETTERS
+  PERSONAL_INFO_UPDATE
+  POLICY_CLARIFICATION
+  BENEFITS
+  PAYROLL_QUERY
+  OTHER
+}
+
+enum HRRequestStatus {
+  SUBMITTED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model HRRequest {
+  id             String            @id @default(cuid())
+  employeeId     String
+  employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  category       HRRequestCategory
+  subject        String
+  description    String
+  status         HRRequestStatus   @default(SUBMITTED)
+  assignedToId   String? // User.id of the HR person handling it
+  resolutionNote String?
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([employeeId])
   @@index([status])

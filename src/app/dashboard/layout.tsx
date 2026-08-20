@@ -42,6 +42,7 @@ export default async function DashboardLayout({
             <Link href="/dashboard/attendance">Attendance</Link>
             <Link href="/dashboard/wfh">WFH</Link>
             <Link href="/dashboard/documents">Documents</Link>
+            <Link href="/dashboard/requests">Requests</Link>
             {/* Role assignment is HR_ADMIN-only — see src/lib/actions/user-role.ts */}
             {isAdmin && <Link href="/dashboard/users">Users</Link>}
           </nav>
