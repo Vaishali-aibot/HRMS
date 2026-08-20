@@ -124,7 +124,11 @@ export async function decideLeaveRequest(
   const parsed = decideSchema.safeParse({
     requestId: formData.get("requestId"),
     decision: formData.get("decision"),
-    decisionReason: formData.get("decisionReason"),
+    // formData.get() returns null (not undefined) for a field that isn't
+    // in the form at all (the decide forms only send requestId+decision) —
+    // z.string().optional() only accepts undefined, so a bare null here
+    // fails validation. Normalize before parsing.
+    decisionReason: formData.get("decisionReason") ?? undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
