@@ -240,9 +240,11 @@ enum DocumentStatus {
   RESUBMISSION_REQUIRED
 }
 
-/// One row per required document per employee (PRD §10). No file storage
-/// yet — this tracks status only; see README roadmap for the Vercel Blob
-/// upload step.
+/// One row per required document per employee (PRD §10). The file itself
+/// lives in Vercel Blob as a **private** object (requires our own
+/// authenticated proxy route to read — see src/app/api/documents/[id]/
+/// route.ts) — these can be PAN/Aadhaar/bank proof, so nothing here is
+/// ever a directly browsable public URL.
 model OnboardingDocument {
   id         String         @id @default(cuid())
   employeeId String
@@ -250,6 +252,15 @@ model OnboardingDocument {
   type       DocumentType
   status     DocumentStatus @default(NOT_SUBMITTED)
   notes      String?
+
+  // --- Uploaded file (all null until something is uploaded) ---
+  blobPathname String? // pass to @vercel/blob's get()/del(), not a public URL
+  fileName     String?
+  fileSize     Int?
+  contentType  String?
+  uploadedById String? // User.id — the employee themselves, or HR on their behalf
+  uploadedAt   DateTime?
+
   updatedAt  DateTime       @updatedAt
   createdAt  DateTime       @default(now())
 

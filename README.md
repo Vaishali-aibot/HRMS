@@ -44,15 +44,19 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   personal dashboard summary of their own record; employees can submit
   **correction requests** for a past date → their manager or HR
   approves/rejects → an approval applies the correction and audit-logs it,
-  same as a direct HR override)
+  same as a direct HR override), **document upload** (PRD §10 — employees
+  upload their own onboarding documents to Vercel Blob as **private**
+  objects — PAN/Aadhaar/bank proof are never a public URL — served back
+  only through an authenticated route to the document's own employee or
+  HR; uploading resets status to `SUBMITTED` for re-review, and a
+  re-upload deletes the file it replaced)
 
-Not yet built: actual document **upload/storage** (the document checklist
-tracks status only, no file attached yet — see Known items), WFH as its own
-request workflow (folded into attendance's `WORK_FROM_HOME` status instead),
-self-service/manager attendance *marking* (only correction *requests* exist
-— direct marking stays HR-only), performance, recognition, exits, reports,
-automated reminders, etc. — see
-[Roadmap](#roadmap-remaining-prd-modules) below for a suggested build order.
+Not yet built: WFH as its own request workflow (folded into attendance's
+`WORK_FROM_HOME` status instead), self-service/manager attendance
+*marking* (only correction *requests* exist — direct marking stays
+HR-only), performance, recognition, exits, reports, automated reminders,
+etc. — see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested
+build order.
 
 ## Project structure
 
@@ -65,12 +69,19 @@ src/
     dashboard/employees/page.tsx  Employee Master list (PRD §7)
     dashboard/employees/new/      Add-employee form
     dashboard/employees/[id]/     Employee detail/edit page, status-change form,
-                                   onboarding document/IT checklist rows
+                                   onboarding document/IT checklist rows (+ upload)
     dashboard/onboarding/page.tsx Onboarding progress overview (PRD §6/§10/§11)
+    dashboard/documents/page.tsx  Self-service: upload my own onboarding documents
     dashboard/leave/              Leave: balances, apply form, approve/reject (PRD §14)
-    dashboard/attendance/         Attendance: HR marks status, personal summary (PRD §13)
+    dashboard/attendance/         Attendance: HR marks status, personal summary,
+                                   correction requests (PRD §13)
     dashboard/users/              HR_ADMIN-only role assignment + employee linking
     api/auth/[...nextauth]/       Auth.js route handler
+    api/documents/[documentId]/   Authenticated file download/streaming proxy —
+                                   the ONLY way to read an uploaded document
+  components/
+    documents/upload-document-form.tsx  Shared file-upload form (self-service
+                                         page + HR's view on the employee detail page)
   lib/
     auth.ts                       Auth.js config (Entra ID provider, RBAC session)
     prisma.ts                     Prisma Client singleton (driver adapter)
@@ -80,11 +91,13 @@ src/
                                    "use client" files (rbac.ts is not — see comment)
     safe-redirect.ts              Open-redirect guard for callbackUrl-style params
     leave-balance.ts              ensureLeaveBalance() — lazy per-year balance creation
+    document-upload.ts            Shared upload constraints (size/type) — client + server
     actions/employee.ts           Server Action: create employee (transactional,
                                    also seeds onboarding checklists + leave balances)
     actions/employee-detail.ts    Server Actions: update employee (+ AuditLog),
                                    change lifecycle status (+ EmployeeStatusHistory)
-    actions/onboarding.ts         Server Actions: update document/IT task status
+    actions/onboarding.ts         Server Actions: update document/IT task status,
+                                   upload an onboarding document to Vercel Blob
     actions/user-role.ts          Server Actions: change a user's role (+ AuditLog),
                                    link/unlink a user to an employee record
     actions/leave.ts              Server Actions: apply/approve/reject/cancel leave
@@ -118,6 +131,25 @@ prisma/
    ```bash
    npm run dev
    ```
+
+### Document uploads — Vercel Blob
+
+Onboarding document uploads need a Blob store, which needs a token:
+
+1. Locally: run `npx vercel link` once (connects this folder to a Vercel
+   project — create one first at [vercel.com/new](https://vercel.com/new)
+   if you haven't deployed yet), then `npx vercel env pull .env.development.local`
+   to pull `BLOB_READ_WRITE_TOKEN` down automatically once a store exists.
+2. If no Blob store exists yet: in the Vercel dashboard → your project →
+   **Storage** tab → **Create Database** → **Blob**. Connecting it to the
+   project sets `BLOB_READ_WRITE_TOKEN` for you in Vercel's environment
+   variables (and `vercel env pull` brings it to your machine).
+3. In Vercel's **Project Settings → Environment Variables**, `BLOB_READ_WRITE_TOKEN`
+   should already be there once the store is connected — verify it's set
+   for Production (and Preview, if you want PR previews to support uploads).
+
+Without this token set, `uploadOnboardingDocument` will fail — the rest of
+the app works fine, this only affects document upload specifically.
 
 ### Creating the first HR Admin
 
@@ -182,6 +214,8 @@ https://learn.microsoft.com/entra/identity-platform/quickstart-register-app
    - `AUTH_MICROSOFT_ENTRA_ID_ID`
    - `AUTH_MICROSOFT_ENTRA_ID_SECRET`
    - `AUTH_MICROSOFT_ENTRA_ID_ISSUER`
+   - `BLOB_READ_WRITE_TOKEN` (see "Document uploads — Vercel Blob" above —
+     set automatically once you connect a Blob store to the project)
 5. Deploy. `postinstall` runs `prisma generate` automatically during the
    Vercel build — you don't need to configure that.
 6. Run the migration against the production database once, from your
@@ -244,9 +278,21 @@ git push -u origin main
   while building the role-assignment screen. Pure, client-safe role
   constants/labels live in `src/lib/roles.ts` instead — import from there,
   never from `rbac.ts`, in any Client Component.
-- Onboarding documents track **status only** — there's no file storage yet
-  (see roadmap: Vercel Blob upload), and there's no automated reminder for
-  pending documents/IT tasks yet (see roadmap: Vercel Cron).
+- There's no automated reminder for pending documents/IT tasks yet (see
+  roadmap: Vercel Cron).
+- **Document upload uses Vercel Blob's `private` access mode** (files
+  require our own authenticated route to read, not a bare public URL —
+  appropriate given these can be PAN/Aadhaar/bank proof). I verified this
+  design against `@vercel/blob`'s actual installed type definitions (the
+  `access: 'private'` option and its `get()`/`put()` signatures), but I
+  have **not** exercised it against a real Blob store — there's no
+  `BLOB_READ_WRITE_TOKEN` in this environment to test with. Upload a real
+  document and confirm the download link works before relying on this in
+  production.
+- Re-uploading a document deletes the blob it replaced (best-effort — a
+  failed delete is logged but doesn't fail the upload). There's no
+  versioning/history of previously-uploaded files, and no way to delete a
+  document without replacing it.
 - **Leave has no carry-forward, accrual, or encashment** (all in PRD §14) —
   every `LeaveBalance` is a flat per-year allocation at the `LeaveType`'s
   default, created lazily the first time it's needed. A request spanning a
@@ -282,24 +328,21 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 (§43):
 
 **Next (P0 remainder):**
-1. Document upload (Vercel Blob) for the onboarding checklist — statuses
-   are already trackable; this adds an actual file behind each
-   `OnboardingDocument` row.
-2. Automated reminders (Vercel Cron + an email provider like Resend) for
+1. Automated reminders (Vercel Cron + an email provider like Resend) for
    pending onboarding documents/IT tasks, upcoming probation ends, and
    pending leave requests.
-3. Manager/self-service *direct* attendance marking — today only HR can
+2. Manager/self-service *direct* attendance marking — today only HR can
    mark directly; everyone else goes through a correction request.
-4. Leave type management UI (HR can currently only use the 3 seeded
+3. Leave type management UI (HR can currently only use the 3 seeded
    defaults) and carry-forward/accrual (PRD §14).
-5. WFH as its own request workflow (PRD §15) — currently just an attendance
+4. WFH as its own request workflow (PRD §15) — currently just an attendance
    status value, no separate request/approval flow.
-6. Probation tracking automation (§16): scheduled job flips status and
+5. Probation tracking automation (§16): scheduled job flips status and
    notifies HR/manager at 30/15/7 days — can now call the same
    `changeEmployeeStatus` action the detail page uses.
-7. Exit/separation workflow (§24–§26): resignation → checklist → asset
+6. Exit/separation workflow (§24–§26): resignation → checklist → asset
    return → clearance.
-8. HR Helpdesk (§21): request categories, SLA dashboard.
+7. HR Helpdesk (§21): request categories, SLA dashboard.
 
 **Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
 asset management (§26), integrations (§32) — Outlook/Teams notifications,

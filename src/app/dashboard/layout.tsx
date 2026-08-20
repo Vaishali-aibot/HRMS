@@ -29,11 +29,12 @@ export default async function DashboardLayout({
                 into a dead end. */}
             {canViewRoster && <Link href="/dashboard/employees">Employees</Link>}
             {canViewRoster && <Link href="/dashboard/onboarding">Onboarding</Link>}
-            {/* Leave/Attendance serve everyone — self-service if you're an
-                EMPLOYEE/MANAGER, org-wide management if you're HR/MANAGEMENT.
-                See src/app/dashboard/leave/page.tsx and .../attendance/page.tsx. */}
+            {/* Leave/Attendance/Documents serve everyone — self-service if
+                you're an EMPLOYEE/MANAGER, org-wide management if you're
+                HR/MANAGEMENT. See the respective page.tsx files. */}
             <Link href="/dashboard/leave">Leave</Link>
             <Link href="/dashboard/attendance">Attendance</Link>
+            <Link href="/dashboard/documents">Documents</Link>
             {/* Role assignment is HR_ADMIN-only — see src/lib/actions/user-role.ts */}
             {isAdmin && <Link href="/dashboard/users">Users</Link>}
           </nav>

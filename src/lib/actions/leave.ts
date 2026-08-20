@@ -27,7 +27,12 @@ export async function applyForLeave(
   _prevState: LeaveActionState,
   formData: FormData
 ): Promise<LeaveActionState> {
-  const session = await requireSession();
+  let session;
+  try {
+    session = await requireSession();
+  } catch {
+    return { error: "You must be signed in to do this." };
+  }
 
   const employee = await prisma.employee.findUnique({ where: { userId: session.user.id } });
   if (!employee) {
@@ -109,7 +114,12 @@ export async function decideLeaveRequest(
   _prevState: LeaveActionState,
   formData: FormData
 ): Promise<LeaveActionState> {
-  const session = await requireSession();
+  let session;
+  try {
+    session = await requireSession();
+  } catch {
+    return { error: "You must be signed in to do this." };
+  }
 
   const parsed = decideSchema.safeParse({
     requestId: formData.get("requestId"),
@@ -206,7 +216,12 @@ export async function cancelLeaveRequest(
   _prevState: LeaveActionState,
   formData: FormData
 ): Promise<LeaveActionState> {
-  const session = await requireSession();
+  let session;
+  try {
+    session = await requireSession();
+  } catch {
+    return { error: "You must be signed in to do this." };
+  }
 
   const parsed = cancelSchema.safeParse({ requestId: formData.get("requestId") });
   if (!parsed.success) {
