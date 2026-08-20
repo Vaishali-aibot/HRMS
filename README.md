@@ -49,14 +49,19 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   objects — PAN/Aadhaar/bank proof are never a public URL — served back
   only through an authenticated route to the document's own employee or
   HR; uploading resets status to `SUBMITTED` for re-review, and a
-  re-upload deletes the file it replaced)
+  re-upload deletes the file it replaced), **automated reminders** (PRD
+  §23 — a daily Vercel Cron job emails each onboarding employee their own
+  outstanding documents, each manager their team's pending leave requests,
+  and every `HR_ADMIN` a daily digest — all skipped/logged instead of
+  failing if email isn't configured yet)
 
 Not yet built: WFH as its own request workflow (folded into attendance's
 `WORK_FROM_HOME` status instead), self-service/manager attendance
 *marking* (only correction *requests* exist — direct marking stays
-HR-only), performance, recognition, exits, reports, automated reminders,
-etc. — see [Roadmap](#roadmap-remaining-prd-modules) below for a suggested
-build order.
+HR-only), performance, recognition, exits, reports, probation-end
+reminders (needs probation automation first — see roadmap), etc. — see
+[Roadmap](#roadmap-remaining-prd-modules) below for a suggested build
+order.
 
 ## Project structure
 
@@ -79,6 +84,7 @@ src/
     api/auth/[...nextauth]/       Auth.js route handler
     api/documents/[documentId]/   Authenticated file download/streaming proxy —
                                    the ONLY way to read an uploaded document
+    api/cron/reminders/           Vercel Cron target — see vercel.json
   components/
     documents/upload-document-form.tsx  Shared file-upload form (self-service
                                          page + HR's view on the employee detail page)
@@ -92,6 +98,8 @@ src/
     safe-redirect.ts              Open-redirect guard for callbackUrl-style params
     leave-balance.ts              ensureLeaveBalance() — lazy per-year balance creation
     document-upload.ts            Shared upload constraints (size/type) — client + server
+    email.ts                      sendEmail() — Resend, logs instead of throwing if unconfigured
+    reminders.ts                  Reminder queries + emails, called by the cron route
     actions/employee.ts           Server Action: create employee (transactional,
                                    also seeds onboarding checklists + leave balances)
     actions/employee-detail.ts    Server Actions: update employee (+ AuditLog),
@@ -150,6 +158,40 @@ Onboarding document uploads need a Blob store, which needs a token:
 
 Without this token set, `uploadOnboardingDocument` will fail — the rest of
 the app works fine, this only affects document upload specifically.
+
+### Automated reminders — Resend + Vercel Cron
+
+The daily reminders job (`src/app/api/cron/reminders/route.ts`) needs two
+things set. Without them, the rest of the app still works — reminders just
+get logged to the console instead of emailed (see `src/lib/email.ts`).
+
+1. **Email**: create a free account at [resend.com](https://resend.com),
+   verify a sending domain (or use their shared test domain for local dev),
+   and create an API key. Set:
+   ```
+   RESEND_API_KEY=<your API key>
+   EMAIL_FROM="HRMS <notifications@yourdomain.com>"
+   ```
+2. **Cron auth**: generate a random 16+ character string (a password
+   generator works fine) and set it as `CRON_SECRET` in both your local
+   `.env` and Vercel's environment variables — Vercel automatically sends
+   it as `Authorization: Bearer <value>` when it invokes the cron job. The
+   route refuses every request if this isn't set, so don't skip it in
+   Vercel even though the job doesn't run locally (`vercel dev`/`next dev`
+   don't trigger cron jobs — see "Running cron jobs locally" in Vercel's
+   docs if you want to test it manually with `curl`).
+3. Optional: set `NEXT_PUBLIC_APP_URL` to your real deployed URL so links
+   inside reminder emails don't point at `localhost`.
+
+`vercel.json` schedules the job for `0 3 * * *` (3am UTC, once daily) —
+Vercel's Hobby plan only allows once-per-day cron jobs, so this is the
+right default even if you're on a paid plan and could go more frequent.
+
+I have not run this against a real Resend account or a real Vercel Cron
+invocation — verified against `resend`'s and Vercel's actual documented
+APIs, but genuinely untested end-to-end in this environment. Send yourself
+a test reminder (`curl` the route with the right `Authorization` header)
+before trusting it in production.
 
 ### Creating the first HR Admin
 
@@ -216,6 +258,10 @@ https://learn.microsoft.com/entra/identity-platform/quickstart-register-app
    - `AUTH_MICROSOFT_ENTRA_ID_ISSUER`
    - `BLOB_READ_WRITE_TOKEN` (see "Document uploads — Vercel Blob" above —
      set automatically once you connect a Blob store to the project)
+   - `RESEND_API_KEY`, `EMAIL_FROM`, `CRON_SECRET` (see "Automated
+     reminders — Resend + Vercel Cron" above)
+   - `NEXT_PUBLIC_APP_URL` (optional — your production URL, used for links
+     inside reminder emails)
 5. Deploy. `postinstall` runs `prisma generate` automatically during the
    Vercel build — you don't need to configure that.
 6. Run the migration against the production database once, from your
@@ -278,8 +324,22 @@ git push -u origin main
   while building the role-assignment screen. Pure, client-safe role
   constants/labels live in `src/lib/roles.ts` instead — import from there,
   never from `rbac.ts`, in any Client Component.
-- There's no automated reminder for pending documents/IT tasks yet (see
-  roadmap: Vercel Cron).
+- **Reminders have no backoff or dedup** — the cron job re-sends to
+  anything still outstanding on every run (daily), so a document pending a
+  week gets ~7 emails, not one. Also not deduped against duplicate cron
+  invocations (Vercel's own docs note cron delivery can double-fire) — a
+  double-send in one day is a mild annoyance for a reminder email, not
+  something worth a distributed lock over at this stage.
+- **Reminders only reach people with a resolvable email**: an employee
+  reminder needs either a linked `User` (SSO email) or `personalEmail` set;
+  a manager reminder needs the manager to have a linked `User` too. Anyone
+  missing both is silently skipped — counted in the route's JSON response
+  (`skippedNoEmail`/`skippedNoManagerEmail`) but not surfaced anywhere in
+  the UI yet.
+- I have not run the reminders job against a real Resend account or a real
+  Vercel Cron invocation — verified against the actual `resend` package
+  types and Vercel's current documented cron-auth pattern, but genuinely
+  untested end-to-end (no API key/cron infra in this environment).
 - **Document upload uses Vercel Blob's `private` access mode** (files
   require our own authenticated route to read, not a bare public URL —
   appropriate given these can be PAN/Aadhaar/bank proof). I verified this
@@ -328,21 +388,21 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 (§43):
 
 **Next (P0 remainder):**
-1. Automated reminders (Vercel Cron + an email provider like Resend) for
-   pending onboarding documents/IT tasks, upcoming probation ends, and
-   pending leave requests.
+1. Probation tracking automation (§16): the cron job/reminders
+   infrastructure now exists (`src/lib/reminders.ts`,
+   `src/app/api/cron/reminders/route.ts`) — add a probation-end check
+   there and a way to actually *set* `probationEndDate` (nothing does
+   today), then flip status via the existing `changeEmployeeStatus` action
+   at 30/15/7 days out.
 2. Manager/self-service *direct* attendance marking — today only HR can
    mark directly; everyone else goes through a correction request.
 3. Leave type management UI (HR can currently only use the 3 seeded
    defaults) and carry-forward/accrual (PRD §14).
 4. WFH as its own request workflow (PRD §15) — currently just an attendance
    status value, no separate request/approval flow.
-5. Probation tracking automation (§16): scheduled job flips status and
-   notifies HR/manager at 30/15/7 days — can now call the same
-   `changeEmployeeStatus` action the detail page uses.
-6. Exit/separation workflow (§24–§26): resignation → checklist → asset
+5. Exit/separation workflow (§24–§26): resignation → checklist → asset
    return → clearance.
-7. HR Helpdesk (§21): request categories, SLA dashboard.
+6. HR Helpdesk (§21): request categories, SLA dashboard.
 
 **Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
 asset management (§26), integrations (§32) — Outlook/Teams notifications,
