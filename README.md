@@ -36,10 +36,12 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   setup-task row per employee, created automatically the moment the
   employee record exists; a dedicated `/dashboard/onboarding` view lists
   everyone currently pre-boarding/onboarding with checklist progress),
-  **leave** (PRD §14 — 3 default leave types seeded automatically, one
-  balance per employee per year created lazily, apply → manager-or-HR
-  approve/reject → balance deducted on approval with a re-check to prevent
-  overdrawing), **attendance** (PRD §13 — HR marks anyone's status directly;
+  **leave** (PRD §14 — 3 default leave types seeded automatically, HR can
+  add/edit types and set a per-type carry-forward limit at
+  `/dashboard/leave-types`; one balance per employee per year created
+  lazily, including any carry-forward from the prior year; apply →
+  manager-or-HR approve/reject → balance deducted on approval with a
+  re-check to prevent overdrawing), **attendance** (PRD §13 — HR marks anyone's status directly;
   a manager can mark their own direct reports' (checked in the action, not
   just implied by the UI); everyone gets same-day self-check-in for their
   own record plus a monthly summary; every override/self-mark writes an
@@ -84,6 +86,7 @@ src/
     dashboard/onboarding/page.tsx Onboarding progress overview (PRD §6/§10/§11)
     dashboard/documents/page.tsx  Self-service: upload my own onboarding documents
     dashboard/leave/              Leave: balances, apply form, approve/reject (PRD §14)
+    dashboard/leave-types/        HR-only: add/edit leave types, carry-forward limits
     dashboard/attendance/         Attendance: HR/manager marking, self-check-in,
                                    personal summary, correction requests (PRD §13)
     dashboard/users/              HR_ADMIN-only role assignment + employee linking
@@ -117,6 +120,7 @@ src/
     actions/user-role.ts          Server Actions: change a user's role (+ AuditLog),
                                    link/unlink a user to an employee record
     actions/leave.ts              Server Actions: apply/approve/reject/cancel leave
+    actions/leave-type.ts         Server Actions: create/update a leave type
     actions/attendance.ts         Server Actions: mark attendance (HR any / manager own
                                    reports), self-check-in for today (+ AuditLog)
     actions/attendance-correction.ts  Server Actions: request/approve/reject/cancel
@@ -362,12 +366,13 @@ git push -u origin main
   failed delete is logged but doesn't fail the upload). There's no
   versioning/history of previously-uploaded files, and no way to delete a
   document without replacing it.
-- **Leave has no carry-forward, accrual, or encashment** (all in PRD §14) —
-  every `LeaveBalance` is a flat per-year allocation at the `LeaveType`'s
-  default, created lazily the first time it's needed. A request spanning a
-  year boundary (e.g. Dec 30 → Jan 2) is checked/deducted entirely against
-  the *start* date's year, not split across both. HR can't add/edit leave
-  types via the UI yet — only the 3 seeded defaults exist.
+- **Leave has carry-forward but no accrual or encashment** (all three in
+  PRD §14). Carry-forward is computed once, when a year's balance is
+  lazily created, from whatever the *previous* year's balance looked like
+  at that moment — editing `carryForwardLimit` later never rewrites a
+  balance that already exists (see `ensureLeaveBalance`). A request
+  spanning a year boundary (e.g. Dec 30 → Jan 2) is checked/deducted
+  entirely against the *start* date's year, not split across both.
   `applyForLeave`'s balance check is a courtesy, not a reservation (two
   pending requests can both pass it) — `decideLeaveRequest` re-checks
   atomically before deducting, which is what actually prevents overdrawing.
@@ -408,8 +413,9 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 (§43):
 
 **Next (P0 remainder):**
-1. Leave type management UI (HR can currently only use the 3 seeded
-   defaults) and carry-forward/accrual (PRD §14).
+1. Leave accrual/encashment (PRD §14) — carry-forward and type management
+   now exist; accrual (earn-over-time rather than a lump sum on Jan 1) and
+   encashment (cash out unused days) don't.
 2. WFH as its own request workflow (PRD §15) — currently just an attendance
    status value, no separate request/approval flow.
 3. Exit/separation workflow (§24–§26): resignation → checklist → asset

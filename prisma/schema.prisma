@@ -301,21 +301,24 @@ model ITOnboardingTask {
 }
 
 // ---------------------------------------------------------------------------
-// Leave management (PRD §14). Carry-forward/accrual/encashment (also in
-// PRD §14) are NOT implemented — every LeaveBalance is a flat per-year
-// allocation, lazily created at the employee's default entitlement the
-// first time it's needed. See README "Known items to revisit".
+// Leave management (PRD §14). Accrual/encashment (also in PRD §14) are NOT
+// implemented. Carry-forward is: at most `carryForwardLimit` unused days
+// roll into the next year's `allocated`, computed once when that year's
+// balance is lazily created — see ensureLeaveBalance in src/lib/leave-balance.ts.
 // ---------------------------------------------------------------------------
 
-/// Org-wide leave type configuration. Seeded with 3 defaults the first time
-/// an employee is created (see src/lib/actions/employee.ts); HR can't add
-/// more via the UI yet (see roadmap).
+/// Org-wide leave type configuration, managed at /dashboard/leave-types.
+/// Seeded with 3 defaults the first time an employee is created (see
+/// src/lib/actions/employee.ts).
 model LeaveType {
-  id          String  @id @default(cuid())
-  name        String  @unique
-  annualDays  Float
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
+  id                String  @id @default(cuid())
+  name              String  @unique
+  annualDays        Float
+  /// Max unused days that carry into next year's balance. 0 = none (the
+  /// default for the 3 seeded types, preserving prior behavior).
+  carryForwardLimit Float   @default(0)
+  isActive          Boolean @default(true)
+  createdAt         DateTime @default(now())
 
   balances LeaveBalance[]
   requests LeaveRequest[]

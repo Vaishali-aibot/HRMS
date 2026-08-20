@@ -69,7 +69,7 @@ export async function applyForLeave(
     // not a silent one (README "Known items to revisit").
     const year = startDate.getFullYear();
     const balance = await prisma.$transaction((tx) =>
-      ensureLeaveBalance(tx, employee.id, leaveType.id, leaveType.annualDays, year)
+      ensureLeaveBalance(tx, employee.id, leaveType, year)
     );
 
     // This is a courtesy check, not a reservation — two pending requests
@@ -159,13 +159,7 @@ export async function decideLeaveRequest(
     if (decision === "APPROVED") {
       const year = request.startDate.getFullYear();
       await prisma.$transaction(async (tx) => {
-        const balance = await ensureLeaveBalance(
-          tx,
-          request.employeeId,
-          request.leaveTypeId,
-          request.leaveType.annualDays,
-          year
-        );
+        const balance = await ensureLeaveBalance(tx, request.employeeId, request.leaveType, year);
         // Re-check at decision time, not just at application time — other
         // requests may have been approved in between and consumed the
         // balance this one assumed was available.

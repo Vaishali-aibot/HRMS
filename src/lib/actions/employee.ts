@@ -150,7 +150,7 @@ export async function createEmployee(
       const leaveTypes = await tx.leaveType.findMany({ where: { isActive: true } });
       const currentYear = new Date().getFullYear();
       for (const leaveType of leaveTypes) {
-        await ensureLeaveBalance(tx, employee.id, leaveType.id, leaveType.annualDays, currentYear);
+        await ensureLeaveBalance(tx, employee.id, leaveType, currentYear);
       }
     });
   } catch (err) {

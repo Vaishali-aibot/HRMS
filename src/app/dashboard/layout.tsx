@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth, signOut } from "@/lib/auth";
-import { HR_VIEW_ROLES, ROLE_LABELS } from "@/lib/rbac";
+import { HR_VIEW_ROLES, HR_WRITE_ROLES, ROLE_LABELS } from "@/lib/rbac";
 
 export default async function DashboardLayout({
   children,
@@ -15,6 +15,7 @@ export default async function DashboardLayout({
   }
 
   const canViewRoster = HR_VIEW_ROLES.includes(session.user.role);
+  const canConfigureLeave = HR_WRITE_ROLES.includes(session.user.role);
   const isAdmin = session.user.role === "HR_ADMIN";
 
   return (
@@ -33,6 +34,8 @@ export default async function DashboardLayout({
                 you're an EMPLOYEE/MANAGER, org-wide management if you're
                 HR/MANAGEMENT. See the respective page.tsx files. */}
             <Link href="/dashboard/leave">Leave</Link>
+            {/* Leave type configuration — HR_ADMIN/HR_EXECUTIVE-only */}
+            {canConfigureLeave && <Link href="/dashboard/leave-types">Leave types</Link>}
             <Link href="/dashboard/attendance">Attendance</Link>
             <Link href="/dashboard/documents">Documents</Link>
             {/* Role assignment is HR_ADMIN-only — see src/lib/actions/user-role.ts */}
