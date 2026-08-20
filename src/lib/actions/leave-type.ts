@@ -13,6 +13,7 @@ const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
   annualDays: z.coerce.number().nonnegative("Must be zero or more"),
   carryForwardLimit: z.coerce.number().nonnegative("Must be zero or more").optional(),
+  accrualMethod: z.enum(["ANNUAL", "MONTHLY"]).optional(),
 });
 
 export async function createLeaveType(
@@ -29,6 +30,7 @@ export async function createLeaveType(
     name: formData.get("name"),
     annualDays: formData.get("annualDays"),
     carryForwardLimit: formData.get("carryForwardLimit") || undefined,
+    accrualMethod: formData.get("accrualMethod") || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -44,6 +46,7 @@ export async function createLeaveType(
         name: parsed.data.name,
         annualDays: parsed.data.annualDays,
         carryForwardLimit: parsed.data.carryForwardLimit ?? 0,
+        accrualMethod: parsed.data.accrualMethod ?? "ANNUAL",
       },
     });
   } catch (err) {
@@ -59,6 +62,7 @@ const updateSchema = z.object({
   leaveTypeId: z.string().min(1),
   annualDays: z.coerce.number().nonnegative("Must be zero or more"),
   carryForwardLimit: z.coerce.number().nonnegative("Must be zero or more"),
+  accrualMethod: z.enum(["ANNUAL", "MONTHLY"]),
 });
 
 /**
@@ -66,6 +70,13 @@ const updateSchema = z.object({
  * created (a future employee, a future year) — it never rewrites a
  * LeaveBalance row that already exists. See the comment on
  * ensureLeaveBalance in src/lib/leave-balance.ts.
+ *
+ * Changing accrualMethod is a partial exception: since ensureLeaveBalance
+ * only ever ratchets `allocated` up (never down), switching MONTHLY ->
+ * ANNUAL mid-year bumps everyone's *existing* balance up to the full
+ * annualDays the next time it's touched; switching ANNUAL -> MONTHLY does
+ * nothing to an existing balance (it's already at or above the monthly
+ * target). Never takes leave away, only ever grants more.
  */
 export async function updateLeaveType(
   _prevState: LeaveTypeState,
@@ -81,6 +92,7 @@ export async function updateLeaveType(
     leaveTypeId: formData.get("leaveTypeId"),
     annualDays: formData.get("annualDays"),
     carryForwardLimit: formData.get("carryForwardLimit"),
+    accrualMethod: formData.get("accrualMethod"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -95,6 +107,7 @@ export async function updateLeaveType(
       data: {
         annualDays: parsed.data.annualDays,
         carryForwardLimit: parsed.data.carryForwardLimit,
+        accrualMethod: parsed.data.accrualMethod,
         isActive,
       },
     });

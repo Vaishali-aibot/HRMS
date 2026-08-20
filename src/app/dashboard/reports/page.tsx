@@ -49,7 +49,7 @@ export default async function ReportsPage() {
     prisma.leaveBalance.groupBy({
       by: ["leaveTypeId"],
       where: { year: currentYear },
-      _sum: { allocated: true, used: true },
+      _sum: { allocated: true, used: true, encashed: true },
     }),
     prisma.leaveType.findMany({ select: { id: true, name: true } }),
     prisma.attendanceRecord.groupBy({
@@ -106,11 +106,13 @@ export default async function ReportsPage() {
   const leaveUtilization = leaveGroups.map((g) => {
     const allocated = g._sum.allocated ?? 0;
     const used = g._sum.used ?? 0;
+    const encashed = g._sum.encashed ?? 0;
     return {
       name: leaveTypeNameById.get(g.leaveTypeId) ?? "Unknown",
       allocated,
       used,
-      utilizationPct: allocated > 0 ? Math.round((used / allocated) * 100) : 0,
+      encashed,
+      utilizationPct: allocated > 0 ? Math.round(((used + encashed) / allocated) * 100) : 0,
     };
   });
 
@@ -213,6 +215,7 @@ export default async function ReportsPage() {
                 <th className="py-1">Type</th>
                 <th className="py-1">Allocated</th>
                 <th className="py-1">Used</th>
+                <th className="py-1">Encashed</th>
                 <th className="py-1">Utilization</th>
               </tr>
             </thead>
@@ -222,12 +225,13 @@ export default async function ReportsPage() {
                   <td className="py-1">{l.name}</td>
                   <td className="py-1">{l.allocated}</td>
                   <td className="py-1">{l.used}</td>
+                  <td className="py-1">{l.encashed}</td>
                   <td className="py-1">{l.utilizationPct}%</td>
                 </tr>
               ))}
               {leaveUtilization.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-3 text-black/50 dark:text-white/50">
+                  <td colSpan={5} className="py-3 text-black/50 dark:text-white/50">
                     No leave balances for {currentYear} yet.
                   </td>
                 </tr>

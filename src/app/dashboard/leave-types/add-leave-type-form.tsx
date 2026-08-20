@@ -36,6 +36,13 @@ export function AddLeaveTypeForm() {
           className={inputClass}
         />
       </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium">Accrual</span>
+        <select name="accrualMethod" defaultValue="ANNUAL" className={inputClass}>
+          <option value="ANNUAL">Annual (all at once)</option>
+          <option value="MONTHLY">Monthly (1/12 per month)</option>
+        </select>
+      </label>
       <button
         type="submit"
         disabled={pending}

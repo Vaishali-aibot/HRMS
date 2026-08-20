@@ -147,6 +147,22 @@ implemented: date-range filtering (every figure is "current
 month"/"current year"/"last 12 months", not adjustable), CSV/PDF export,
 and department-level breakdowns for anything beyond headcount.
 
+**Loose end on P0 — leave accrual/encashment** (PRD §14). Each `LeaveType`
+now has an `accrualMethod`: `ANNUAL` (existing behavior — the full
+`annualDays` from day one, still the default) or `MONTHLY` (`annualDays /
+12` becomes available at the start of each month). There's no cron job for
+this — `ensureLeaveBalance` (`src/lib/leave-balance.ts`) recomputes the
+correct months-elapsed target and ratchets `allocated` up to it (never
+down) every time a balance is touched by anything, so it self-corrects
+whenever it's next read, applied against, or decided on. **Encashment**:
+employees request cashing out unused days from the current year's balance
+at `/dashboard/leave`; a manager or HR approves/rejects it, same
+authorization shape as a leave request. Approving increments a new
+`LeaveBalance.encashed` field (not `used`) — remaining is `allocated -
+used - encashed` everywhere that number is shown. No actual payout
+happens (no payroll integration); this only tracks that the days are
+spent and excludes them from carry-forward into next year.
+
 ## Project structure
 
 ```
@@ -396,11 +412,12 @@ git push -u origin main
   value unless the row is keyed on that value — otherwise React reuses the
   same DOM node and the field keeps showing what was on screen before Save,
   even though the database is correctly updated. Fixed with a
-  value-inclusive `key` on `/dashboard/performance`'s `CycleRow`/`GoalRow`
-  (see the comments there); **not checked or fixed** on the equivalent
-  existing rows in `/dashboard/leave-types` (`LeaveTypeRow`) or
-  `/dashboard/assets` (`AssetRow`), which may have the same stale-display
-  quirk after a save.
+  value-inclusive `key` on every row component that has this shape
+  (`CycleRow`/`GoalRow` in `/dashboard/performance`, `AssetRow` in
+  `/dashboard/assets`, `LeaveTypeRow` in `/dashboard/leave-types` — see the
+  comments at each). Newly-added components follow the same convention;
+  if you add another status-`<select>`-style row later, key it the same
+  way.
 - HR requests: "Withdraw" (`cancelHRRequest`) stays available even after HR
   has marked a request `RESOLVED` — the action only blocks `CLOSED`. May be
   intentional (an employee can still withdraw after resolution), may not be
@@ -538,9 +555,7 @@ Every module in the PRD's own P0 list (§43) now has a first pass built.
 What's left, grouped roughly by the PRD's own priority framework:
 
 **Loose ends on P0 modules (small, not full modules of their own):**
-1. Leave accrual/encashment (PRD §14) — carry-forward and type management
-   now exist; accrual (earn-over-time rather than a lump sum on Jan 1) and
-   encashment (cash out unused days) don't.
+1. ~~Leave accrual/encashment (PRD §14)~~ — done, see "What's built" above.
 2. WFH policy (PRD §15) — eligibility, max-days limits, location
    restrictions. The request/approve/reflect-in-attendance mechanics exist
    (`/dashboard/wfh`); nothing enforces a policy on top of them yet.

@@ -153,6 +153,7 @@ model Employee {
   itTasks                      ITOnboardingTask[]
   leaveBalances                LeaveBalance[]
   leaveRequests                LeaveRequest[]
+  leaveEncashmentRequests      LeaveEncashmentRequest[]
   attendanceRecords            AttendanceRecord[]
   attendanceCorrectionRequests AttendanceCorrectionRequest[]
   wfhRequests                  WFHRequest[]
@@ -319,18 +320,32 @@ model ITOnboardingTask {
 /// Org-wide leave type configuration, managed at /dashboard/leave-types.
 /// Seeded with 3 defaults the first time an employee is created (see
 /// src/lib/actions/employee.ts).
+enum LeaveAccrualMethod {
+  /// The full `annualDays` is available from day one of the year (existing
+  /// behavior, still the default — preserves the 3 seeded types).
+  ANNUAL
+  /// `annualDays / 12` becomes available at the start of each month —
+  /// ensureLeaveBalance (src/lib/leave-balance.ts) recomputes and ratchets
+  /// `LeaveBalance.allocated` up to the correct months-elapsed amount every
+  /// time it's touched, so no separate cron job is needed for this to stay
+  /// current.
+  MONTHLY
+}
+
 model LeaveType {
-  id                String   @id @default(cuid())
-  name              String   @unique
+  id                String             @id @default(cuid())
+  name              String             @unique
   annualDays        Float
   /// Max unused days that carry into next year's balance. 0 = none (the
   /// default for the 3 seeded types, preserving prior behavior).
-  carryForwardLimit Float    @default(0)
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
+  carryForwardLimit Float              @default(0)
+  accrualMethod     LeaveAccrualMethod @default(ANNUAL)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
 
-  balances LeaveBalance[]
-  requests LeaveRequest[]
+  balances           LeaveBalance[]
+  requests           LeaveRequest[]
+  encashmentRequests LeaveEncashmentRequest[]
 }
 
 /// One row per employee per leave type per calendar year.
@@ -343,9 +358,42 @@ model LeaveBalance {
   year        Int
   allocated   Float
   used        Float     @default(0)
+  /// Days converted to a cash payout (PRD §14 "encashment") — a real
+  /// payout never happens in-app (no payroll integration), this just
+  /// tracks that these days are spent and can't also be used or carried
+  /// forward. Remaining = allocated - used - encashed everywhere.
+  encashed    Float     @default(0)
 
   @@unique([employeeId, leaveTypeId, year])
   @@index([employeeId])
+}
+
+enum LeaveEncashmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Employee requests to cash out unused days from a given year's balance ->
+/// manager-or-HR approve/reject, same authorization shape as LeaveRequest.
+/// Approving increments LeaveBalance.encashed (not used) by `days`.
+model LeaveEncashmentRequest {
+  id             String                @id @default(cuid())
+  employeeId     String
+  employee       Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId    String
+  leaveType      LeaveType             @relation(fields: [leaveTypeId], references: [id])
+  year           Int
+  days           Float
+  status         LeaveEncashmentStatus @default(PENDING)
+  approverId     String?
+  decidedAt      DateTime?
+  decisionReason String?
+  createdAt      DateTime              @default(now())
+
+  @@index([employeeId])
+  @@index([status])
 }
 
 enum LeaveRequestStatus {

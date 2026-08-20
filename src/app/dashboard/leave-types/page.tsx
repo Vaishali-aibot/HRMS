@@ -29,7 +29,12 @@ export default async function LeaveTypesPage() {
           </thead>
           <tbody>
             {leaveTypes.map((lt) => (
-              <LeaveTypeRow key={lt.id} leaveType={lt} />
+              // Keyed on accrualMethod/isActive too — LeaveTypeRow's
+              // accrualMethod <select> and isActive checkbox are
+              // uncontrolled (defaultValue/defaultChecked), which React
+              // doesn't re-sync on a revalidatePath re-render unless
+              // remounted. Same fix as CycleRow/GoalRow/AssetRow.
+              <LeaveTypeRow key={`${lt.id}:${lt.accrualMethod}:${lt.isActive}`} leaveType={lt} />
             ))}
             {leaveTypes.length === 0 && (
               <tr>

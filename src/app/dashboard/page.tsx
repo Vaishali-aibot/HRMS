@@ -48,7 +48,7 @@ export default async function DashboardPage() {
                 <StatCard
                   key={b.id}
                   label={`${b.leaveType.name} remaining`}
-                  value={b.allocated - b.used}
+                  value={b.allocated - b.used - b.encashed}
                 />
               ))}
             </div>

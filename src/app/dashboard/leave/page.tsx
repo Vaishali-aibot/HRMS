@@ -5,7 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES } from "@/lib/rbac";
 
 import { ApplyLeaveForm } from "./apply-leave-form";
+import { EncashmentRequestRow } from "./encashment-request-row";
 import { LeaveRequestRow } from "./leave-request-row";
+import { RequestEncashmentForm } from "./request-encashment-form";
 
 function fmt(d: Date) {
   return d.toLocaleDateString(undefined, { timeZone: "UTC" });
@@ -38,22 +40,45 @@ export default async function LeavePage() {
   const canDecideAnyRequest = HR_WRITE_ROLES.includes(session.user.role);
   const isManager = session.user.role === "MANAGER";
 
-  const [teamRequests, orgRequests] = await Promise.all([
-    isManager && employee
-      ? prisma.leaveRequest.findMany({
-          where: { status: "PENDING", employee: { reportingManagerId: employee.id } },
-          orderBy: { createdAt: "asc" },
-          include: { employee: true, leaveType: true },
-        })
-      : Promise.resolve([]),
-    canViewOrgWide
-      ? prisma.leaveRequest.findMany({
-          where: { status: "PENDING" },
-          orderBy: { createdAt: "asc" },
-          include: { employee: true, leaveType: true },
-        })
-      : Promise.resolve([]),
-  ]);
+  const [teamRequests, orgRequests, myEncashmentRequests, teamEncashmentRequests, orgEncashmentRequests] =
+    await Promise.all([
+      isManager && employee
+        ? prisma.leaveRequest.findMany({
+            where: { status: "PENDING", employee: { reportingManagerId: employee.id } },
+            orderBy: { createdAt: "asc" },
+            include: { employee: true, leaveType: true },
+          })
+        : Promise.resolve([]),
+      canViewOrgWide
+        ? prisma.leaveRequest.findMany({
+            where: { status: "PENDING" },
+            orderBy: { createdAt: "asc" },
+            include: { employee: true, leaveType: true },
+          })
+        : Promise.resolve([]),
+      employee
+        ? prisma.leaveEncashmentRequest.findMany({
+            where: { employeeId: employee.id },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+            include: { leaveType: true },
+          })
+        : Promise.resolve([]),
+      isManager && employee
+        ? prisma.leaveEncashmentRequest.findMany({
+            where: { status: "PENDING", employee: { reportingManagerId: employee.id } },
+            orderBy: { createdAt: "asc" },
+            include: { employee: true, leaveType: true },
+          })
+        : Promise.resolve([]),
+      canViewOrgWide
+        ? prisma.leaveEncashmentRequest.findMany({
+            where: { status: "PENDING" },
+            orderBy: { createdAt: "asc" },
+            include: { employee: true, leaveType: true },
+          })
+        : Promise.resolve([]),
+    ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -69,9 +94,12 @@ export default async function LeavePage() {
                   key={b.id}
                   className="rounded-xl border border-black/10 p-3 dark:border-white/15"
                 >
-                  <div className="text-lg font-semibold">{b.allocated - b.used}</div>
+                  <div className="text-lg font-semibold">
+                    {b.allocated - b.used - b.encashed}
+                  </div>
                   <div className="text-xs text-black/60 dark:text-white/60">
                     {b.leaveType.name} remaining
+                    {b.encashed > 0 && ` (${b.encashed} encashed)`}
                   </div>
                 </div>
               ))}
@@ -113,6 +141,40 @@ export default async function LeavePage() {
               )}
             </ul>
           </div>
+
+          <div>
+            <h2 className="text-sm font-semibold">Request encashment</h2>
+            <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+              Cash out unused days from this year&apos;s balance. No payment
+              happens in this app (no payroll integration) — this just marks
+              the days as spent once HR/your manager approves.
+            </p>
+            <div className="mt-2">
+              <RequestEncashmentForm leaveTypes={leaveTypes} />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold">My encashment requests</h2>
+            <ul className="mt-2 space-y-2">
+              {myEncashmentRequests.map((r) => (
+                <EncashmentRequestRow
+                  key={r.id}
+                  request={{
+                    id: r.id,
+                    leaveTypeName: r.leaveType.name,
+                    year: r.year,
+                    days: r.days,
+                    status: r.status,
+                  }}
+                  canCancel
+                />
+              ))}
+              {myEncashmentRequests.length === 0 && (
+                <li className="text-sm text-black/50 dark:text-white/50">No requests yet.</li>
+              )}
+            </ul>
+          </div>
         </>
       ) : (
         <p className="text-sm text-black/60 dark:text-white/60">
@@ -148,6 +210,32 @@ export default async function LeavePage() {
         </div>
       )}
 
+      {isManager && (
+        <div>
+          <h2 className="text-sm font-semibold">Team encashment requests awaiting your decision</h2>
+          <ul className="mt-2 space-y-2">
+            {teamEncashmentRequests.map((r) => (
+              <EncashmentRequestRow
+                key={r.id}
+                request={{
+                  id: r.id,
+                  employeeName: r.employee.fullName,
+                  leaveTypeName: r.leaveType.name,
+                  year: r.year,
+                  days: r.days,
+                  status: r.status,
+                }}
+                showEmployeeName
+                canDecide
+              />
+            ))}
+            {teamEncashmentRequests.length === 0 && (
+              <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
+            )}
+          </ul>
+        </div>
+      )}
+
       {canViewOrgWide && (
         <div>
           <h2 className="text-sm font-semibold">All pending requests</h2>
@@ -173,6 +261,32 @@ export default async function LeavePage() {
               />
             ))}
             {orgRequests.length === 0 && (
+              <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {canViewOrgWide && (
+        <div>
+          <h2 className="text-sm font-semibold">All pending encashment requests</h2>
+          <ul className="mt-2 space-y-2">
+            {orgEncashmentRequests.map((r) => (
+              <EncashmentRequestRow
+                key={r.id}
+                request={{
+                  id: r.id,
+                  employeeName: r.employee.fullName,
+                  leaveTypeName: r.leaveType.name,
+                  year: r.year,
+                  days: r.days,
+                  status: r.status,
+                }}
+                showEmployeeName
+                canDecide={canDecideAnyRequest}
+              />
+            ))}
+            {orgEncashmentRequests.length === 0 && (
               <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
             )}
           </ul>

@@ -17,6 +17,7 @@ export function LeaveTypeRow({
     name: string;
     annualDays: number;
     carryForwardLimit: number;
+    accrualMethod: string;
     isActive: boolean;
   };
 }) {
@@ -50,6 +51,17 @@ export function LeaveTypeRow({
               title="Max days carried into next year"
               className={inputClass}
             />
+          </label>
+          <label className="flex items-center gap-1 text-xs">
+            Accrual
+            <select
+              name="accrualMethod"
+              defaultValue={leaveType.accrualMethod}
+              className={inputClass}
+            >
+              <option value="ANNUAL">Annual</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
           </label>
           <label className="flex items-center gap-1 text-xs">
             {/* No hidden "false" fallback needed — an unchecked checkbox
