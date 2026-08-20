@@ -74,11 +74,15 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   type, a location allowlist, and max-days-per-month/year limits — checked
   as a courtesy when applying and for real right before approving, same
   two-stage pattern as a leave balance check), **exit/separation** (PRD
-  §24–§26 — recording a resignation computes `lastWorkingDay` from
-  `noticePeriodDays`, moves status to `NOTICE_PERIOD`, and seeds an
-  11-item exit checklist the same way onboarding seeds its own; a
-  dedicated `/dashboard/exits` view lists everyone currently in notice
-  period with checklist progress; an **asset registry** (`/dashboard/assets`)
+  §24–§26 — two ways to start one: HR records a resignation directly, or
+  an employee submits it themselves at `/dashboard` for their manager or
+  HR to approve/reject (PRD §24's literal first two steps) — either path
+  computes `lastWorkingDay` from `noticePeriodDays`, moves status to
+  `NOTICE_PERIOD`, and seeds a 10-item exit checklist the same way
+  onboarding seeds its own (both share one `commenceNoticePeriod` helper,
+  so the two paths can never drift apart); a dedicated `/dashboard/exits`
+  view lists everyone currently in notice period with checklist progress;
+  an **asset registry** (`/dashboard/assets`)
   makes the checklist's "Asset Return" step real — register, assign, and
   return an asset (assignable to an employee at any lifecycle status,
   including pre-boarding — so onboarding-time issuing already works with
@@ -92,11 +96,9 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   daily HR digest email — not a configurable SLA policy, just a fixed
   visibility threshold)
 
-This completes the PRD's own P0 list (§43). Not yet built: a
-resignation-approval gate before notice period starts (HR records it
-directly instead), a comment thread on HR requests (one description +
-one resolution note, not a conversation) — see
-[Roadmap](#roadmap-remaining-prd-modules) below.
+This completes the PRD's own P0 list (§43). Not yet built: a comment
+thread on HR requests (one description + one resolution note, not a
+conversation) — see [Roadmap](#roadmap-remaining-prd-modules) below.
 
 **P1 — performance management** (PRD §17–§18 — goal setting, self/manager
 reviews, ratings, performance improvement plans). *The exact PRD §17–§18
@@ -526,25 +528,23 @@ git push -u origin main
   feature landed have `probationEndDate = null` until someone extends
   probation or edits the record — the reminders job simply won't flag
   them (no crash, no false positive, just silent until set).
-- **WFH has no policy enforcement** (eligibility, max days, location
-  restrictions — all PRD §15) — any employee can request any date range up
-  to 31 days, and any manager/HR can approve it. Approving one is an
-  *authoritative* override: it overwrites whatever `AttendanceRecord`
-  already existed for every covered date (same as an approved attendance
-  correction), so approving a WFH request that overlaps a day HR already
-  marked ABSENT, for instance, silently replaces that with
-  WORK_FROM_HOME — there's no conflict warning shown to the approver yet.
-- **Exit has no resignation-approval gate** — HR records a resignation
-  directly (moving status straight to `NOTICE_PERIOD` and seeding the
-  checklist), rather than an employee submitting one for their manager to
-  approve first (PRD §24's literal first two steps). Nothing blocks moving
-  an employee to `EXITED` before every checklist item is `COMPLETED`
-  either — the checklist is tracking, not a gate.
-- **The asset registry is exit-checklist-minimal, not a full asset
-  management module** — no issuing during onboarding, no damage/condition
-  history beyond the single free-text field captured at return, no
-  reporting. It exists so "Asset Return" in the exit checklist has
-  something real behind it.
+- **Approving a WFH request is still an unconditional *authoritative*
+  override** — it overwrites whatever `AttendanceRecord` already existed
+  for every covered date (same as an approved attendance correction), so
+  approving a WFH request that overlaps a day HR already marked ABSENT,
+  for instance, silently replaces that with WORK_FROM_HOME — there's no
+  conflict warning shown to the approver. The policy engine (eligibility/
+  max-days/location) added later only gates whether a request can be
+  *submitted and approved at all*, not this overwrite behavior once it is.
+- **Nothing blocks moving an employee to `EXITED` before every exit
+  checklist item is `COMPLETED`** — the checklist is tracking, not a gate,
+  regardless of which of the two paths (HR records it directly, or an
+  employee's resignation request gets approved) started the notice period.
+- **The asset registry has no reporting** (a per-asset history exists, but
+  nothing aggregates it — e.g. no "assets currently overdue for return" or
+  "average time to return" view) and no richer IT-asset-specific fields
+  (warranty, purchase cost, vendor) — `type`/`serialNumber`/`condition`
+  stay free text, same tradeoff as `Employee.department`.
 - **HR requests have no comment thread and no configurable SLA policy** —
   one description at submission, one resolution note at close, not a
   running conversation; the "overdue" flag on `/dashboard/requests` and in
@@ -559,8 +559,11 @@ What's left, grouped roughly by the PRD's own priority framework:
 **Loose ends on P0 modules (small, not full modules of their own):**
 1. ~~Leave accrual/encashment (PRD §14)~~ — done, see "What's built" above.
 2. ~~WFH policy (PRD §15)~~ — done, see "What's built" above.
-3. A resignation-approval gate before notice period starts (PRD §24's
-   literal first two steps) — HR records the resignation directly today.
+3. ~~A resignation-approval gate before notice period starts (PRD §24)~~ —
+   done, see "What's built" above.
+
+All three "loose ends" are now done — every item in the PRD's P0 list, and
+every gap noted against it, is built.
 
 **Next (P1):**
 1. ~~Performance cycles + PIP (§17–§18)~~ — done, see "What's built" above.

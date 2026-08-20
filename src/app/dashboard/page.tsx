@@ -4,6 +4,14 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES } from "@/lib/rbac";
+import { NOT_EXITABLE_STATUSES } from "@/lib/exit-constants";
+
+import { ResignForm } from "./resign-form";
+import { ResignationRequestRow } from "./resignation-request-row";
+
+function fmt(d: Date) {
+  return d.toLocaleDateString(undefined, { timeZone: "UTC" });
+}
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -27,12 +35,23 @@ export default async function DashboardPage() {
 
   if (!HR_VIEW_ROLES.includes(role)) {
     const currentYear = new Date().getFullYear();
+    const isManager = role === "MANAGER";
     const employee = await prisma.employee.findUnique({
       where: { userId: session.user.id },
       include: {
         leaveBalances: { where: { year: currentYear }, include: { leaveType: true } },
+        resignationRequests: { orderBy: { createdAt: "desc" }, take: 5 },
       },
     });
+
+    const teamResignationRequests =
+      isManager && employee
+        ? await prisma.resignationRequest.findMany({
+            where: { status: "PENDING", employee: { reportingManagerId: employee.id } },
+            orderBy: { createdAt: "asc" },
+            include: { employee: true },
+          })
+        : [];
 
     return (
       <div>
@@ -74,10 +93,66 @@ export default async function DashboardPage() {
           </p>
         )}
 
-        <p className="mt-6 text-sm text-black/60 dark:text-white/60">
-          Documents and HR requests self-service land in a later phase — see
-          the MVP roadmap.
-        </p>
+        {employee &&
+          (NOT_EXITABLE_STATUSES.includes(
+            employee.status as (typeof NOT_EXITABLE_STATUSES)[number]
+          ) ? null : (
+            <div className="mt-8">
+              <h2 className="text-sm font-semibold">Resign</h2>
+              <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+                Submits a request for your manager or HR to approve — it
+                doesn&apos;t start your notice period until they do.
+              </p>
+              <div className="mt-2">
+                <ResignForm />
+              </div>
+              {employee.resignationRequests.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {employee.resignationRequests.map((r) => (
+                    <ResignationRequestRow
+                      key={r.id}
+                      request={{
+                        id: r.id,
+                        resignationDate: fmt(r.resignationDate),
+                        noticePeriodDays: r.noticePeriodDays,
+                        reason: r.reason,
+                        status: r.status,
+                      }}
+                      canCancel
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+
+        {isManager && (
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold">
+              Team resignation requests awaiting your decision
+            </h2>
+            <ul className="mt-2 space-y-2">
+              {teamResignationRequests.map((r) => (
+                <ResignationRequestRow
+                  key={r.id}
+                  request={{
+                    id: r.id,
+                    employeeName: r.employee.fullName,
+                    resignationDate: fmt(r.resignationDate),
+                    noticePeriodDays: r.noticePeriodDays,
+                    reason: r.reason,
+                    status: r.status,
+                  }}
+                  showEmployeeName
+                  canDecide
+                />
+              ))}
+              {teamResignationRequests.length === 0 && (
+                <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
+              )}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }
@@ -86,7 +161,7 @@ export default async function DashboardPage() {
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const [total, active, newJoiners, onProbation, onNotice, pendingOnboarding] =
+  const [total, active, newJoiners, onProbation, onNotice, pendingOnboarding, pendingResignations] =
     await Promise.all([
       prisma.employee.count(),
       prisma.employee.count({ where: { status: "ACTIVE" } }),
@@ -99,6 +174,11 @@ export default async function DashboardPage() {
       prisma.employee.count({ where: { status: "NOTICE_PERIOD" } }),
       prisma.employee.count({
         where: { status: { in: ["PRE_BOARDING", "ONBOARDING"] } },
+      }),
+      prisma.resignationRequest.findMany({
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "asc" },
+        include: { employee: true },
       }),
     ]);
 
@@ -120,6 +200,30 @@ export default async function DashboardPage() {
         <StatCard label="On probation" value={onProbation} />
         <StatCard label="Notice period" value={onNotice} />
         <StatCard label="Pending onboarding" value={pendingOnboarding} />
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold">Pending resignation requests</h2>
+        <ul className="mt-2 space-y-2">
+          {pendingResignations.map((r) => (
+            <ResignationRequestRow
+              key={r.id}
+              request={{
+                id: r.id,
+                employeeName: r.employee.fullName,
+                resignationDate: fmt(r.resignationDate),
+                noticePeriodDays: r.noticePeriodDays,
+                reason: r.reason,
+                status: r.status,
+              }}
+              showEmployeeName
+              canDecide
+            />
+          ))}
+          {pendingResignations.length === 0 && (
+            <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
+          )}
+        </ul>
       </div>
     </div>
   );

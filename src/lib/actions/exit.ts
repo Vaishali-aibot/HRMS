@@ -7,10 +7,53 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES, requireRole } from "@/lib/rbac";
 import { ExitChecklistItemType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
+import { NOT_EXITABLE_STATUSES } from "@/lib/exit-constants";
 
 export type InitiateExitState = { error?: string };
 
-const NOT_EXITABLE_STATUSES = ["NOTICE_PERIOD", "EXITED", "ALUMNI"] as const;
+/**
+ * The actual state transition (PRD §24): resignationDate/noticePeriodDays
+ * recorded, lastWorkingDay computed, status -> NOTICE_PERIOD, exit
+ * checklist seeded — shared by initiateExit (HR records it directly) and
+ * decideResignationRequest (an employee's self-submitted request gets
+ * approved). Caller is responsible for the NOT_EXITABLE_STATUSES check
+ * and the EmployeeStatusHistory `reason` text.
+ */
+export async function commenceNoticePeriod(
+  tx: Prisma.TransactionClient,
+  employeeId: string,
+  previousStatus: string,
+  resignationDate: Date,
+  noticePeriodDays: number,
+  reason: string | undefined,
+  changedById: string
+) {
+  const lastWorkingDay = new Date(resignationDate);
+  lastWorkingDay.setUTCDate(lastWorkingDay.getUTCDate() + noticePeriodDays);
+
+  await tx.employee.update({
+    where: { id: employeeId },
+    data: { resignationDate, noticePeriodDays, lastWorkingDay, status: "NOTICE_PERIOD" },
+  });
+
+  await tx.employeeStatusHistory.create({
+    data: {
+      employeeId,
+      previousStatus: previousStatus as never,
+      newStatus: "NOTICE_PERIOD",
+      reason: reason || "Resignation recorded",
+      changedById,
+    },
+  });
+
+  // Exit starts the moment it's recorded — same "seed everything now"
+  // pattern createEmployee uses for onboarding checklists.
+  await tx.exitChecklistItem.createMany({
+    data: Object.values(ExitChecklistItemType).map((type) => ({ employeeId, type })),
+    skipDuplicates: true,
+  });
+}
 
 const initiateSchema = z.object({
   employeeId: z.string().min(1),
@@ -20,10 +63,11 @@ const initiateSchema = z.object({
 });
 
 /**
- * PRD §24: resignation → notice period → exit checklist, all seeded at
- * once. See the schema comment on ExitChecklistItem for the two ways this
- * simplifies the PRD's literal workflow (no separate resignation-approval
- * gate; nothing blocks EXITED before the checklist is done).
+ * HR records a resignation directly (skipping the employee-submits →
+ * manager-approves gate that ResignationRequest/decideResignationRequest
+ * in src/lib/actions/resignation.ts provides as an alternative) — realistic
+ * when the conversation already happened offline and HR is just entering
+ * it into the system.
  */
 export async function initiateExit(
   _prevState: InitiateExitState,
@@ -47,8 +91,6 @@ export async function initiateExit(
   }
   const { employeeId, noticePeriodDays, reason } = parsed.data;
   const resignationDate = new Date(parsed.data.resignationDate);
-  const lastWorkingDay = new Date(resignationDate);
-  lastWorkingDay.setUTCDate(lastWorkingDay.getUTCDate() + noticePeriodDays);
 
   try {
     const existing = await prisma.employee.findUnique({
@@ -62,37 +104,17 @@ export async function initiateExit(
       return { error: "This employee's exit has already been initiated (or completed)." };
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.employee.update({
-        where: { id: employeeId },
-        data: {
-          resignationDate,
-          noticePeriodDays,
-          lastWorkingDay,
-          status: "NOTICE_PERIOD",
-        },
-      });
-
-      await tx.employeeStatusHistory.create({
-        data: {
-          employeeId,
-          previousStatus: existing.status,
-          newStatus: "NOTICE_PERIOD",
-          reason: reason || "Resignation recorded",
-          changedById: session.user.id,
-        },
-      });
-
-      // Exit starts the moment it's recorded — same "seed everything now"
-      // pattern createEmployee uses for onboarding checklists.
-      await tx.exitChecklistItem.createMany({
-        data: Object.values(ExitChecklistItemType).map((type) => ({
-          employeeId,
-          type,
-        })),
-        skipDuplicates: true,
-      });
-    });
+    await prisma.$transaction((tx) =>
+      commenceNoticePeriod(
+        tx,
+        employeeId,
+        existing.status,
+        resignationDate,
+        noticePeriodDays,
+        reason,
+        session.user.id
+      )
+    );
   } catch (err) {
     console.error("initiateExit failed:", err);
     return { error: "Something went wrong. Please try again." };
