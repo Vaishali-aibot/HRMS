@@ -27,7 +27,10 @@ Deploys to **Vercel**; auth is **Microsoft Entra ID (Azure AD) SSO** against the
   (headcount/probation/notice-period counts, HR/management-only), employee
   list (HR/management-only), add-employee form (employee + lifecycle-history
   write in one atomic transaction, race-free sequential employee codes,
-  reporting-manager picked from a real employee list rather than free text)
+  reporting-manager picked from a real employee list rather than free text),
+  employee detail/edit page (field edits write to `AuditLog`, status changes
+  write to `EmployeeStatusHistory` with a real `previousStatus` — read-only
+  for `MANAGEMENT`, editable for `HR_ADMIN`/`HR_EXECUTIVE`)
 
 Everything else in the PRD (onboarding workflow, documents, attendance,
 leave, performance, recognition, exits, reports, etc.) is **not built yet**
@@ -44,6 +47,7 @@ src/
     dashboard/page.tsx            HR metrics dashboard (PRD §6)
     dashboard/employees/page.tsx  Employee Master list (PRD §7)
     dashboard/employees/new/      Add-employee form
+    dashboard/employees/[id]/     Employee detail/edit page + status-change form
     api/auth/[...nextauth]/       Auth.js route handler
   lib/
     auth.ts                       Auth.js config (Entra ID provider, RBAC session)
@@ -51,6 +55,8 @@ src/
     rbac.ts                       requireRole()/requireRoleForPage()/requireSession() guards
     safe-redirect.ts              Open-redirect guard for callbackUrl-style params
     actions/employee.ts           Server Action: create employee (transactional)
+    actions/employee-detail.ts    Server Actions: update employee (+ AuditLog),
+                                   change lifecycle status (+ EmployeeStatusHistory)
   proxy.ts                        Route protection (Next 16's renamed "middleware")
   types/next-auth.d.ts            Session type augmentation (adds role, id)
 prisma/
@@ -185,9 +191,10 @@ git push -u origin main
 - Compensation/bank/statutory fields (PRD §7) exist in the schema but have
   no UI yet — deliberately, since they need tighter field-level RBAC than
   this scaffold implements. Build that as its own module (see roadmap).
-- `AuditLog` (PRD §31) exists as a table only — nothing writes to it yet,
-  since there's no edit/update mutation for it to log. Wire it up when the
-  first "edit employee" action is built.
+- The reporting-manager picker only blocks the immediate cycle (an employee
+  can't be their own manager). It doesn't check deeper cycles (A → B → A).
+  Fine for a small, HR-curated org chart; revisit if this ever needs to
+  scale unsupervised.
 - The `Counter` model (used for atomic, race-free `employeeCode` generation)
   was added after the initial scaffold. If you already ran a migration
   before pulling this change, run `npm run db:migrate` again to pick it up.
@@ -200,17 +207,16 @@ Suggested build order, grouped roughly by the PRD's own priority framework
 **Next (P0 remainder):**
 1. Role assignment screen (HR Admin invites/promotes users) — currently
    manual via Prisma Studio.
-2. Employee detail/edit page + status-change action (drives §8 lifecycle
-   + §31 audit log you already have tables for).
-3. Onboarding workflow (§10–§11): document checklist, document upload
+2. Onboarding workflow (§10–§11): document checklist, document upload
    (Vercel Blob), IT checklist, automated reminder cron (Vercel Cron).
-4. Attendance + Leave modules (§13–§15): leave types/balances, apply/approve
+3. Attendance + Leave modules (§13–§15): leave types/balances, apply/approve
    flow, WFH requests.
-5. Probation tracking automation (§16): scheduled job flips status and
-   notifies HR/manager at 30/15/7 days.
-6. Exit/separation workflow (§24–§26): resignation → checklist → asset
+4. Probation tracking automation (§16): scheduled job flips status and
+   notifies HR/manager at 30/15/7 days — can now call the same
+   `changeEmployeeStatus` action the detail page uses.
+5. Exit/separation workflow (§24–§26): resignation → checklist → asset
    return → clearance.
-7. HR Helpdesk (§21): request categories, SLA dashboard.
+6. HR Helpdesk (§21): request categories, SLA dashboard.
 
 **Later (P1):** performance cycles + PIP (§17–§18), recognition (§19),
 asset management (§26), integrations (§32) — Outlook/Teams notifications,

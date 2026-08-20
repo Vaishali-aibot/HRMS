@@ -49,8 +49,16 @@ export default async function EmployeesPage() {
           <tbody>
             {employees.map((e) => (
               <tr key={e.id} className="border-t border-black/10 dark:border-white/10">
-                <td className="px-4 py-2 font-mono text-xs">{e.employeeCode}</td>
-                <td className="px-4 py-2">{e.fullName}</td>
+                <td className="px-4 py-2 font-mono text-xs">
+                  <Link href={`/dashboard/employees/${e.id}`} className="hover:underline">
+                    {e.employeeCode}
+                  </Link>
+                </td>
+                <td className="px-4 py-2">
+                  <Link href={`/dashboard/employees/${e.id}`} className="hover:underline">
+                    {e.fullName}
+                  </Link>
+                </td>
                 <td className="px-4 py-2">{e.department}</td>
                 <td className="px-4 py-2">{e.designation}</td>
                 <td className="px-4 py-2">
