@@ -31,6 +31,7 @@ export default async function DashboardLayout({
             {canViewRoster && <Link href="/dashboard/employees">Employees</Link>}
             {canViewRoster && <Link href="/dashboard/onboarding">Onboarding</Link>}
             {canViewRoster && <Link href="/dashboard/exits">Exits</Link>}
+            {canViewRoster && <Link href="/dashboard/reports">Reports</Link>}
             {/* Asset registry — HR_ADMIN/HR_EXECUTIVE-only, same as leave types */}
             {isHRWrite && <Link href="/dashboard/assets">Assets</Link>}
             {/* Leave/Attendance/Documents serve everyone — self-service if

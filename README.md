@@ -132,6 +132,21 @@ retract their own post; HR can moderate/remove anyone's. Points aren't
 tied to any budget or redemption system — it's a running "how recognized
 is this person" signal, not a spendable currency.
 
+**P1 — reports & analytics** (PRD §27–§28). A single read-only page
+(`/dashboard/reports`, HR/management-only) aggregating across every other
+module instead of leaving those numbers scattered across each module's own
+page: headcount by department/lifecycle status, exit trend + average
+tenure over the last 12 months, current-year leave utilization by type,
+this month's attendance breakdown, average performance rating per
+completed review cycle, recognition volume by category, and HR helpdesk
+volume by category + average time-to-resolution. No new schema or Server
+Actions — every figure is a Prisma `groupBy`/`aggregate` (or, where Prisma
+can't month-truncate a date, a small in-memory bucketing over an already
+narrow query) over models the rest of the app already writes to. Not
+implemented: date-range filtering (every figure is "current
+month"/"current year"/"last 12 months", not adjustable), CSV/PDF export,
+and department-level breakdowns for anything beyond headcount.
+
 ## Project structure
 
 ```
@@ -542,10 +557,7 @@ What's left, grouped roughly by the PRD's own priority framework:
    same design tradeoff as `Employee.department`.
 4. Integrations (§32) — Outlook/Teams notifications, e-signature. Email
    exists (Resend) but nothing else does.
-5. Reports & analytics (§27–§28) — the PRD wants dedicated report views
-   and a management analytics dashboard; today's numbers are scattered
-   across each module's own page (dashboard stats, onboarding/exits
-   overviews) rather than a proper reporting section.
+5. ~~Reports & analytics (§27–§28)~~ — done, see "What's built" above.
 
 **Phase 3 (P2):** AI assistant / natural-language HR queries (§40) — a
 good fit for Claude once the data model above is populated.
