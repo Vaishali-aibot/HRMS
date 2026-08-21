@@ -429,10 +429,25 @@ an app. This is a console step only you can do — I can't do it for you.
    ```
    AUTH_MICROSOFT_ENTRA_ID_ID=<Application (client) ID>
    AUTH_MICROSOFT_ENTRA_ID_SECRET=<client secret value>
-   AUTH_MICROSOFT_ENTRA_ID_ISSUER=https://login.microsoftonline.com/<Directory (tenant) ID>/v2.0/
+   AUTH_MICROSOFT_ENTRA_ID_ISSUER=https://login.microsoftonline.com/<Directory (tenant) ID>/v2.0
    ```
    Setting `ISSUER` to your tenant restricts sign-in to dotkonnekt.com
    accounts only — don't skip it, or any Microsoft account could sign in.
+
+   **No trailing slash on `ISSUER`** — I got this wrong the first time
+   while actually deploying this project. Auth.js validates that the
+   `issuer` field in Microsoft's own OIDC discovery document
+   (`.../v2.0/.well-known/openid-configuration`) exactly matches what you
+   configure here, and Microsoft's real discovery document returns the
+   issuer *without* a trailing slash — confirmed by fetching it directly:
+   ```bash
+   curl -s "https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration" | grep issuer
+   ```
+   Get this wrong and sign-in fails with a generic "There is a problem
+   with the server configuration" page — the real cause (`"issuer"
+   property does not match the expected value`) only shows up in Vercel's
+   function logs (`vercel logs <deployment-url>`), not on the error page
+   itself.
 
 I have not verified this against the current Entra admin center UI (it
 changes screen layouts periodically) — if a menu is in a different place,
