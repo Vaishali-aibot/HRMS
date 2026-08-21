@@ -265,9 +265,14 @@ prisma/
 1. Copy `.env.example` to `.env` and fill in `DATABASE_URL` (see below) —
    `AUTH_MICROSOFT_ENTRA_ID_*` can stay blank until you've done the Azure
    step, but the app won't start sign-in without them.
-2. Generate an `AUTH_SECRET`:
+2. Generate an `AUTH_SECRET` — any sufficiently random string works; this
+   generates one without depending on a third-party CLI's current
+   behavior (I found while deploying this that `npx auth secret` now
+   resolves to an unrelated "Better Auth" package's generator, not
+   Auth.js's — the *value* it prints is still fine to use, but the
+   command itself is misleading, so don't rely on it):
    ```bash
-   npx auth secret
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    ```
 3. Get a Postgres database. Fastest path for local dev — a free
    [Neon](https://neon.tech) project, or `npx prisma dev` for a local
