@@ -459,16 +459,27 @@ https://learn.microsoft.com/entra/identity-platform/quickstart-register-app
      reminders — Resend + Vercel Cron" above)
    - `NEXT_PUBLIC_APP_URL` (optional — your production URL, used for links
      inside reminder emails)
-5. Deploy. `postinstall` runs `prisma generate` automatically during the
-   Vercel build — you don't need to configure that.
-6. Run the migration against the production database once, from your
-   machine (or a Vercel deploy hook / CI step):
-   ```bash
-   DATABASE_URL="<production connection string>" npm run db:deploy
-   ```
-7. Go back to your Entra app registration and add the production redirect
+5. Deploy. The `build` script is `prisma migrate deploy && next build` —
+   the migration runs automatically as part of every build, against
+   whatever `DATABASE_URL` that build has, so the production schema stays
+   current with no separate manual step. (`postinstall` also runs `prisma
+   generate` automatically — you don't need to configure that either.)
+6. Go back to your Entra app registration and add the production redirect
    URI (step 3 in the Azure section above), using your real
    `*.vercel.app` domain or custom domain.
+
+**Why the migration lives in the build script, not a manual step:** if you
+mark `DATABASE_URL` as a Vercel "Sensitive" environment variable (the
+padlock/eye-off option — recommended, since it's a real credential),
+Vercel will never let you read that value back again, through the
+dashboard *or* `vercel env pull` — I hit this directly while deploying
+this project and had to work around it this way. A sensitive variable's
+real value is still available to the build/runtime itself, just not to
+any human or CLI trying to view it afterward, so running the migration
+inside the build (where the real value is present) sidesteps the problem
+entirely instead of needing to extract the connection string yourself.
+`npm run db:deploy` still exists for a non-sensitive database (local dev,
+or a connection string you're comfortable handling directly).
 
 I'm not fully certain of Vercel's current exact UI labels/flow (dashboards
 change over time) — the sequence above is the one that's been stable for a
