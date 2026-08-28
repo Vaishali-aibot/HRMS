@@ -1,0 +1,11 @@
+-- Adds a flag so a future bulk recompute of probationEndDate (like
+-- 20260826090000_recompute_probation_end_dates) can skip rows HR has
+-- manually extended instead of silently overwriting that decision — see
+-- the review finding on that migration for the risk this closes.
+--
+-- No backfill: on this database nothing has used extendProbation yet, so
+-- every row correctly starts at false. A database where extensions already
+-- happened before this column existed won't have those retroactively
+-- flagged — a disclosed limitation — but every extension going forward
+-- (extendProbation now sets this) is correctly tracked.
+ALTER TABLE "Employee" ADD COLUMN "probationExtendedManually" BOOLEAN NOT NULL DEFAULT false;

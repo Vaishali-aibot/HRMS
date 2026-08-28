@@ -1,10 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  CalendarClock,
+  CalendarDays,
+  ClipboardList,
+  Clock,
+  Hourglass,
+  Plus,
+  UserCheck,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { StatCard } from "@/components/stat-card";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES } from "@/lib/rbac";
 import { NOT_EXITABLE_STATUSES } from "@/lib/exit-constants";
+import { getRemainingForLeaveType } from "@/lib/leave-balance";
+import { todayUTC } from "@/lib/date-only";
 
 import { ResignForm } from "./resign-form";
 import { ResignationRequestRow } from "./resignation-request-row";
@@ -13,13 +29,8 @@ function fmt(d: Date) {
   return d.toLocaleDateString(undefined, { timeZone: "UTC" });
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
-      <div className="text-2xl font-semibold">{value}</div>
-      <div className="text-sm text-black/60 dark:text-white/60">{label}</div>
-    </div>
-  );
+function EmptyRow({ children }: { children: React.ReactNode }) {
+  return <li className="text-sm text-muted-foreground">{children}</li>;
 }
 
 export default async function DashboardPage() {
@@ -34,15 +45,36 @@ export default async function DashboardPage() {
   const role = session.user.role;
 
   if (!HR_VIEW_ROLES.includes(role)) {
-    const currentYear = new Date().getFullYear();
     const isManager = role === "MANAGER";
-    const employee = await prisma.employee.findUnique({
-      where: { userId: session.user.id },
-      include: {
-        leaveBalances: { where: { year: currentYear }, include: { leaveType: true } },
-        resignationRequests: { orderBy: { createdAt: "desc" }, take: 5 },
-      },
-    });
+    const [employee, leaveTypes] = await Promise.all([
+      prisma.employee.findUnique({
+        where: { userId: session.user.id },
+        include: {
+          resignationRequests: { orderBy: { createdAt: "desc" }, take: 5 },
+        },
+      }),
+      prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    ]);
+
+    // Same pattern as the Leave page's applyLeaveTypes: go through
+    // getRemainingForLeaveType (ensureLeaveBalance under the hood) instead
+    // of reading employee.leaveBalances rows directly, so this stays
+    // ratcheted up to date and actually includes monthlyCap types (WFH),
+    // which have no LeaveBalance row at all.
+    const leaveBalanceCards = employee
+      ? await Promise.all(
+          leaveTypes.map(async (lt) => {
+            const remaining = await prisma.$transaction((tx) =>
+              getRemainingForLeaveType(tx, employee.id, lt, todayUTC())
+            );
+            return {
+              id: lt.id,
+              label: `${lt.name} remaining${lt.monthlyCap != null ? " (this month)" : ""}`,
+              remaining,
+            };
+          })
+        )
+      : [];
 
     const teamResignationRequests =
       isManager && employee
@@ -54,104 +86,111 @@ export default async function DashboardPage() {
         : [];
 
     return (
-      <div>
-        <h1 className="text-xl font-semibold">Welcome, {session.user.name}</h1>
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Welcome, {session.user.name}
+          </h1>
+          {employee && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {employee.employeeCode} · {employee.designation} · {employee.department}
+            </p>
+          )}
+        </div>
 
         {employee ? (
           <>
-            <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-              {employee.employeeCode} · {employee.designation} · {employee.department}
-            </p>
-            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-              {employee.leaveBalances.map((b) => (
-                <StatCard
-                  key={b.id}
-                  label={`${b.leaveType.name} remaining`}
-                  value={b.allocated - b.used - b.encashed}
-                />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {leaveBalanceCards.map((c) => (
+                <StatCard key={c.id} icon={CalendarDays} label={c.label} value={c.remaining} />
               ))}
             </div>
-            <div className="mt-6 flex gap-3 text-sm">
-              <Link
-                href="/dashboard/leave"
-                className="rounded-md bg-black px-3 py-1.5 font-medium text-white dark:bg-white dark:text-black"
-              >
+            <div className="flex gap-3">
+              <Button nativeButton={false} render={<Link href="/dashboard/leave" />}>
+                <CalendarDays />
                 Apply for leave
-              </Link>
-              <Link
-                href="/dashboard/attendance"
-                className="rounded-md border border-black/15 px-3 py-1.5 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              </Button>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/dashboard/attendance" />}
               >
+                <Clock />
                 My attendance
-              </Link>
+              </Button>
             </div>
           </>
         ) : (
-          <p className="mt-2 text-sm text-black/60 dark:text-white/60">
+          <p className="text-sm text-muted-foreground">
             Your account isn&apos;t linked to an employee record yet — contact
             HR to enable leave and attendance self-service.
           </p>
         )}
 
         {employee &&
-          (NOT_EXITABLE_STATUSES.includes(
+          !NOT_EXITABLE_STATUSES.includes(
             employee.status as (typeof NOT_EXITABLE_STATUSES)[number]
-          ) ? null : (
-            <div className="mt-8">
-              <h2 className="text-sm font-semibold">Resign</h2>
-              <p className="mt-1 text-xs text-black/50 dark:text-white/50">
-                Submits a request for your manager or HR to approve — it
-                doesn&apos;t start your notice period until they do.
-              </p>
-              <div className="mt-2">
+          ) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Resign</CardTitle>
+                <CardDescription>
+                  Submits a request for your manager or HR to approve — it
+                  doesn&apos;t start your notice period until they do.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
                 <ResignForm />
-              </div>
-              {employee.resignationRequests.length > 0 && (
-                <ul className="mt-3 space-y-2">
-                  {employee.resignationRequests.map((r) => (
-                    <ResignationRequestRow
-                      key={r.id}
-                      request={{
-                        id: r.id,
-                        resignationDate: fmt(r.resignationDate),
-                        noticePeriodDays: r.noticePeriodDays,
-                        reason: r.reason,
-                        status: r.status,
-                      }}
-                      canCancel
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
+                {employee.resignationRequests.length > 0 && (
+                  <ul className="flex flex-col gap-2">
+                    {employee.resignationRequests.map((r) => (
+                      <ResignationRequestRow
+                        key={r.id}
+                        request={{
+                          id: r.id,
+                          resignationDate: fmt(r.resignationDate),
+                          noticePeriodDays: r.noticePeriodDays,
+                          reason: r.reason,
+                          status: r.status,
+                        }}
+                        canCancel
+                      />
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
         {isManager && (
-          <div className="mt-8">
-            <h2 className="text-sm font-semibold">
-              Team resignation requests awaiting your decision
-            </h2>
-            <ul className="mt-2 space-y-2">
-              {teamResignationRequests.map((r) => (
-                <ResignationRequestRow
-                  key={r.id}
-                  request={{
-                    id: r.id,
-                    employeeName: r.employee.fullName,
-                    resignationDate: fmt(r.resignationDate),
-                    noticePeriodDays: r.noticePeriodDays,
-                    reason: r.reason,
-                    status: r.status,
-                  }}
-                  showEmployeeName
-                  canDecide
-                />
-              ))}
-              {teamResignationRequests.length === 0 && (
-                <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
-              )}
-            </ul>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Team resignation requests</CardTitle>
+              <CardDescription>Awaiting your decision</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col gap-2">
+                {teamResignationRequests.map((r) => (
+                  <ResignationRequestRow
+                    key={r.id}
+                    request={{
+                      id: r.id,
+                      employeeName: r.employee.fullName,
+                      resignationDate: fmt(r.resignationDate),
+                      noticePeriodDays: r.noticePeriodDays,
+                      reason: r.reason,
+                      status: r.status,
+                    }}
+                    showEmployeeName
+                    canDecide
+                  />
+                ))}
+                {teamResignationRequests.length === 0 && (
+                  <EmptyRow>Nothing pending.</EmptyRow>
+                )}
+              </ul>
+            </CardContent>
+          </Card>
         )}
       </div>
     );
@@ -183,48 +222,53 @@ export default async function DashboardPage() {
     ]);
 
   return (
-    <div>
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">HR Dashboard</h1>
-        <Link
-          href="/dashboard/employees/new"
-          className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-black"
-        >
-          + Add employee
-        </Link>
-      </div>
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard label="Total employees" value={total} />
-        <StatCard label="Active" value={active} />
-        <StatCard label="New joiners (30d)" value={newJoiners} />
-        <StatCard label="On probation" value={onProbation} />
-        <StatCard label="Notice period" value={onNotice} />
-        <StatCard label="Pending onboarding" value={pendingOnboarding} />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">HR Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Org-wide snapshot</p>
+        </div>
+        <Button nativeButton={false} render={<Link href="/dashboard/employees/new" />}>
+          <Plus />
+          Add employee
+        </Button>
       </div>
 
-      <div className="mt-8">
-        <h2 className="text-sm font-semibold">Pending resignation requests</h2>
-        <ul className="mt-2 space-y-2">
-          {pendingResignations.map((r) => (
-            <ResignationRequestRow
-              key={r.id}
-              request={{
-                id: r.id,
-                employeeName: r.employee.fullName,
-                resignationDate: fmt(r.resignationDate),
-                noticePeriodDays: r.noticePeriodDays,
-                reason: r.reason,
-                status: r.status,
-              }}
-              showEmployeeName
-              canDecide
-            />
-          ))}
-          {pendingResignations.length === 0 && (
-            <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
-          )}
-        </ul>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <StatCard icon={Users} label="Total employees" value={total} />
+        <StatCard icon={UserCheck} label="Active" value={active} />
+        <StatCard icon={UserPlus} label="New joiners (30d)" value={newJoiners} />
+        <StatCard icon={Hourglass} label="On probation" value={onProbation} />
+        <StatCard icon={CalendarClock} label="Notice period" value={onNotice} />
+        <StatCard icon={ClipboardList} label="Pending onboarding" value={pendingOnboarding} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pending resignation requests</CardTitle>
+          <CardDescription>Awaiting HR decision</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="flex flex-col gap-2">
+            {pendingResignations.map((r) => (
+              <ResignationRequestRow
+                key={r.id}
+                request={{
+                  id: r.id,
+                  employeeName: r.employee.fullName,
+                  resignationDate: fmt(r.resignationDate),
+                  noticePeriodDays: r.noticePeriodDays,
+                  reason: r.reason,
+                  status: r.status,
+                }}
+                showEmployeeName
+                canDecide
+              />
+            ))}
+            {pendingResignations.length === 0 && <EmptyRow>Nothing pending.</EmptyRow>}
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   );
 }

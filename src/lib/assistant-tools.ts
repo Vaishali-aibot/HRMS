@@ -2,6 +2,8 @@ import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES } from "@/lib/rbac";
+import { ensureLeaveBalance, getMonthlyCapRemaining, remainingFromBalance } from "@/lib/leave-balance";
+import { todayUTC } from "@/lib/date-only";
 import type { AppRole } from "@/types/next-auth";
 
 // ---------------------------------------------------------------------------
@@ -35,19 +37,19 @@ export const ASSISTANT_TOOLS: Tool[] = [
   {
     name: "get_my_leave_balances",
     description:
-      "Get the current user's own leave balances for the current year: leave type name, allocated days, used days, encashed days, and remaining days.",
+      "Get the current user's own leave balances: leave type name, allocated days, used days, and remaining days, for the current year. WFH is capped per calendar month rather than annually — its allocated/used/remaining reflect the current month, not the year.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_my_pending_requests",
     description:
-      "Get the current user's own pending requests awaiting a decision: leave, work-from-home, resignation, attendance correction, and leave encashment requests.",
+      "Get the current user's own pending requests awaiting a decision: leave (including WFH, which is a leave type), resignation, and attendance correction requests.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_team_pending_approvals",
     description:
-      "Get pending requests (leave, work-from-home, resignation, attendance correction, leave encashment) that the current user can approve or reject — their direct reports' if they're a manager, or every pending request org-wide if they're HR. Returns an error if the current user has neither permission.",
+      "Get pending requests (leave — including WFH — resignation, attendance correction) that the current user can approve or reject — their direct reports' if they're a manager, or every pending request org-wide if they're HR. Returns an error if the current user has neither permission.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -112,35 +114,60 @@ export async function runAssistantTool(
     case "get_my_leave_balances": {
       const employee = await getCallerEmployee(session);
       if (!employee) return { error: "Your account isn't linked to an employee record." };
-      const balances = await prisma.leaveBalance.findMany({
-        where: { employeeId: employee.id, year: new Date().getFullYear() },
-        include: { leaveType: true },
-      });
-      return balances.map((b) => ({
-        leaveType: b.leaveType.name,
-        allocated: b.allocated,
-        used: b.used,
-        encashed: b.encashed,
-        remaining: b.allocated - b.used - b.encashed,
-      }));
+      const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true } });
+      const [annualOrQuarterly, monthlyCapTypes] = [
+        leaveTypes.filter((lt) => lt.monthlyCap == null),
+        leaveTypes.filter((lt) => lt.monthlyCap != null),
+      ];
+      const currentYear = new Date().getFullYear();
+      // Goes through ensureLeaveBalance (same as the Leave page/dashboard)
+      // instead of reading LeaveBalance rows directly, so a quarterly/
+      // monthly-accrual type's figure is ratcheted up to date before the
+      // assistant reports it, not whatever it was last left at.
+      const annual = await Promise.all(
+        annualOrQuarterly.map(async (lt) => {
+          const balance = await prisma.$transaction((tx) =>
+            ensureLeaveBalance(tx, employee.id, lt, currentYear)
+          );
+          return {
+            leaveType: lt.name,
+            allocated: balance.allocated,
+            used: balance.used,
+            remaining: remainingFromBalance(balance),
+          };
+        })
+      );
+      const monthly = await Promise.all(
+        monthlyCapTypes.map(async (lt) => {
+          const remaining = await getMonthlyCapRemaining(
+            prisma,
+            employee.id,
+            lt.id,
+            lt.monthlyCap!,
+            todayUTC()
+          );
+          return {
+            leaveType: lt.name,
+            allocated: lt.monthlyCap!,
+            used: lt.monthlyCap! - remaining,
+            remaining,
+          };
+        })
+      );
+      return [...annual, ...monthly];
     }
 
     case "get_my_pending_requests": {
       const employee = await getCallerEmployee(session);
       if (!employee) return { error: "Your account isn't linked to an employee record." };
-      const [leave, wfh, resignation, correction, encashment] = await Promise.all([
+      const [leave, resignation, correction] = await Promise.all([
         prisma.leaveRequest.findMany({
           where: { employeeId: employee.id, status: "PENDING" },
           include: { leaveType: true },
         }),
-        prisma.wFHRequest.findMany({ where: { employeeId: employee.id, status: "PENDING" } }),
         prisma.resignationRequest.findMany({ where: { employeeId: employee.id, status: "PENDING" } }),
         prisma.attendanceCorrectionRequest.findMany({
           where: { employeeId: employee.id, status: "PENDING" },
-        }),
-        prisma.leaveEncashmentRequest.findMany({
-          where: { employeeId: employee.id, status: "PENDING" },
-          include: { leaveType: true },
         }),
       ]);
       return {
@@ -150,7 +177,6 @@ export async function runAssistantTool(
           endDate: fmt(r.endDate),
           days: r.days,
         })),
-        workFromHome: wfh.map((r) => ({ startDate: fmt(r.startDate), endDate: fmt(r.endDate) })),
         resignation: resignation.map((r) => ({
           resignationDate: fmt(r.resignationDate),
           noticePeriodDays: r.noticePeriodDays,
@@ -159,7 +185,6 @@ export async function runAssistantTool(
           date: fmt(r.date),
           requestedStatus: r.requestedStatus,
         })),
-        leaveEncashment: encashment.map((r) => ({ type: r.leaveType.name, days: r.days })),
       };
     }
 
@@ -177,14 +202,10 @@ export async function runAssistantTool(
         ? {}
         : { employee: { reportingManagerId: employee!.id } };
 
-      const [leave, wfh, resignation, correction, encashment] = await Promise.all([
+      const [leave, resignation, correction] = await Promise.all([
         prisma.leaveRequest.findMany({
           where: { status: "PENDING", ...scope },
           include: { employee: true, leaveType: true },
-        }),
-        prisma.wFHRequest.findMany({
-          where: { status: "PENDING", ...scope },
-          include: { employee: true },
         }),
         prisma.resignationRequest.findMany({
           where: { status: "PENDING", ...scope },
@@ -193,10 +214,6 @@ export async function runAssistantTool(
         prisma.attendanceCorrectionRequest.findMany({
           where: { status: "PENDING", ...scope },
           include: { employee: true },
-        }),
-        prisma.leaveEncashmentRequest.findMany({
-          where: { status: "PENDING", ...scope },
-          include: { employee: true, leaveType: true },
         }),
       ]);
       return {
@@ -207,11 +224,6 @@ export async function runAssistantTool(
           endDate: fmt(r.endDate),
           days: r.days,
         })),
-        workFromHome: wfh.map((r) => ({
-          employeeName: r.employee.fullName,
-          startDate: fmt(r.startDate),
-          endDate: fmt(r.endDate),
-        })),
         resignation: resignation.map((r) => ({
           employeeName: r.employee.fullName,
           resignationDate: fmt(r.resignationDate),
@@ -220,11 +232,6 @@ export async function runAssistantTool(
           employeeName: r.employee.fullName,
           date: fmt(r.date),
           requestedStatus: r.requestedStatus,
-        })),
-        leaveEncashment: encashment.map((r) => ({
-          employeeName: r.employee.fullName,
-          type: r.leaveType.name,
-          days: r.days,
         })),
       };
     }

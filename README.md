@@ -277,6 +277,13 @@ prisma/
 3. Get a Postgres database. Fastest path for local dev — a free
    [Neon](https://neon.tech) project, or `npx prisma dev` for a local
    throwaway Postgres. Put the connection string in `DATABASE_URL`.
+   `npx prisma dev` keeps running as its own process — leave it running in a
+   separate terminal alongside `npm run dev`. It prints the connection
+   string to use on startup (with `connection_limit=10` and a handful of
+   `..._timeout=0` params) — use that one verbatim rather than writing your
+   own; the wrong query params here (e.g. an ad-hoc `max=1`) will make any
+   page that fires more than one query at a time fail with "Connection
+   terminated unexpectedly".
 4. Push the schema and generate the client:
    ```bash
    npm run db:migrate
@@ -602,6 +609,21 @@ git push -u origin main
   `applyForLeave`'s balance check is a courtesy, not a reservation (two
   pending requests can both pass it) — `decideLeaveRequest` re-checks
   atomically before deducting, which is what actually prevents overdrawing.
+- **A past one-off data-fixup migration
+  (`20260824090200_reset_current_year_balances_for_new_leave_policy`)
+  recomputed Earned Leave/Sick Leave's current-year `allocated` using pure
+  quarterly-accrual math, without the `carriedForward` term
+  `ensureLeaveBalance` would normally add. Zero real-world impact on this
+  database — `carryForwardLimit` is 0 for every leave type today, so
+  `carriedForward` is always 0 anyway — but it's a latent bug: if
+  `carryForwardLimit` is ever set above 0 for a type with existing
+  balances, and a similar bulk-recompute migration runs again later, it
+  would silently drop carried-forward days the same way. Already-applied
+  migrations can't be edited (breaks `prisma migrate deploy`'s checksum),
+  so this can't be fixed retroactively — if you write a similar recompute
+  migration in the future, make sure it adds back whatever
+  `ensureLeaveBalance`'s `carriedForward` calculation would (see
+  `src/lib/leave-balance.ts`), not just the accrual base.
 - **Self-check-in is same-day only** — an employee can mark PRESENT/
   WORK_FROM_HOME/HALF_DAY for *today*, and only if HR/their manager hasn't
   already set today's record (checked by comparing `markedById`, not just

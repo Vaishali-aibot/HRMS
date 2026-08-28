@@ -286,7 +286,7 @@ export async function extendProbation(
     await prisma.$transaction(async (tx) => {
       await tx.employee.update({
         where: { id: employeeId },
-        data: { probationEndDate: newProbationEndDate },
+        data: { probationEndDate: newProbationEndDate, probationExtendedManually: true },
       });
       await tx.auditLog.create({
         data: {
