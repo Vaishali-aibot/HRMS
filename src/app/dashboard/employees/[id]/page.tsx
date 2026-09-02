@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/status-badge";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES, requireRoleForPage } from "@/lib/rbac";
 
@@ -17,7 +20,7 @@ const ALREADY_EXITING_STATUSES = ["NOTICE_PERIOD", "EXITED", "ALUMNI"];
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-xs text-black/50 dark:text-white/50">{label}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-sm">{value}</div>
     </div>
   );
@@ -66,21 +69,20 @@ export default async function EmployeeDetailPage({
   ]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
         <Link
           href="/dashboard/employees"
-          className="text-sm text-black/60 hover:underline dark:text-white/60"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
         >
-          ← Back to employees
+          <ArrowLeft className="size-3.5" />
+          Back to employees
         </Link>
-        <div className="mt-1 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">{employee.fullName}</h1>
-          <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
-            {employee.status.replaceAll("_", " ")}
-          </span>
+        <div className="mt-2 flex items-center justify-between">
+          <h1 className="text-2xl font-semibold tracking-tight">{employee.fullName}</h1>
+          <StatusBadge status={employee.status} />
         </div>
-        <p className="text-sm text-black/60 dark:text-white/60">
+        <p className="text-sm text-muted-foreground">
           {employee.employeeCode} · {employee.designation} · {employee.department}
         </p>
       </div>
@@ -101,24 +103,29 @@ export default async function EmployeeDetailPage({
           potentialManagers={potentialManagers}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 rounded-xl border border-black/10 p-4 sm:grid-cols-2 dark:border-white/15">
-          <ReadOnlyRow label="Personal email" value={employee.personalEmail ?? "—"} />
-          <ReadOnlyRow label="Location" value={employee.location ?? "—"} />
-          <ReadOnlyRow label="Employment type" value={employee.employmentType.replaceAll("_", " ")} />
-          <ReadOnlyRow label="Work mode" value={employee.workMode.replaceAll("_", " ")} />
-          <ReadOnlyRow
-            label="Reporting manager"
-            value={
-              employee.reportingManager
-                ? `${employee.reportingManager.employeeCode} — ${employee.reportingManager.fullName}`
-                : "—"
-            }
-          />
-          <ReadOnlyRow
-            label="Date of joining"
-            value={employee.dateOfJoining.toLocaleDateString(undefined, { timeZone: "UTC" })}
-          />
-        </div>
+        <Card>
+          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ReadOnlyRow label="Personal email" value={employee.personalEmail ?? "—"} />
+            <ReadOnlyRow label="Location" value={employee.location ?? "—"} />
+            <ReadOnlyRow
+              label="Employment type"
+              value={employee.employmentType.replaceAll("_", " ")}
+            />
+            <ReadOnlyRow label="Work mode" value={employee.workMode.replaceAll("_", " ")} />
+            <ReadOnlyRow
+              label="Reporting manager"
+              value={
+                employee.reportingManager
+                  ? `${employee.reportingManager.employeeCode} — ${employee.reportingManager.fullName}`
+                  : "—"
+              }
+            />
+            <ReadOnlyRow
+              label="Date of joining"
+              value={employee.dateOfJoining.toLocaleDateString(undefined, { timeZone: "UTC" })}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {canEdit && (
@@ -126,23 +133,25 @@ export default async function EmployeeDetailPage({
       )}
 
       {employee.status === "PROBATION" && employee.probationEndDate && (
-        <div>
-          <h2 className="text-sm font-semibold">Probation (PRD §16)</h2>
-          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            Ends {employee.probationEndDate.toLocaleDateString(undefined, { timeZone: "UTC" })} —
-            confirm or exit via the status field above, or extend below.
-          </p>
-          {canEdit && (
-            <div className="mt-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Probation (PRD §16)</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Ends {employee.probationEndDate.toLocaleDateString(undefined, { timeZone: "UTC" })} —
+              confirm or exit via the status field above, or extend below.
+            </p>
+            {canEdit && (
               <ExtendProbationForm
                 employeeId={employee.id}
                 currentEndDate={employee.probationEndDate.toLocaleDateString(undefined, {
                   timeZone: "UTC",
                 })}
               />
-            </div>
-          )}
-        </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {canEdit && !ALREADY_EXITING_STATUSES.includes(employee.status) && (
@@ -150,92 +159,104 @@ export default async function EmployeeDetailPage({
       )}
 
       {employee.status === "NOTICE_PERIOD" && (
-        <div>
-          <h2 className="text-sm font-semibold">Exit checklist (PRD §24)</h2>
-          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            Resigned {employee.resignationDate?.toLocaleDateString(undefined, { timeZone: "UTC" })}
-            {" · "}
-            last working day{" "}
-            {employee.lastWorkingDay?.toLocaleDateString(undefined, { timeZone: "UTC" })}
-          </p>
-          <ul className="mt-2 rounded-xl border border-black/10 dark:border-white/15">
-            {employee.exitChecklistItems.map((item) => (
-              <ExitChecklistRow
-                key={item.id}
-                item={item}
-                employeeId={employee.id}
-                editable={canEdit}
-              />
-            ))}
-          </ul>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Exit checklist (PRD §24)</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Resigned {employee.resignationDate?.toLocaleDateString(undefined, { timeZone: "UTC" })}
+              {" · "}
+              last working day{" "}
+              {employee.lastWorkingDay?.toLocaleDateString(undefined, { timeZone: "UTC" })}
+            </p>
+          </CardHeader>
+          <CardContent className="px-0">
+            <ul>
+              {employee.exitChecklistItems.map((item) => (
+                <ExitChecklistRow
+                  key={item.id}
+                  item={item}
+                  employeeId={employee.id}
+                  editable={canEdit}
+                />
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <div>
-          <h2 className="text-sm font-semibold">Onboarding documents</h2>
-          <ul className="mt-2 rounded-xl border border-black/10 dark:border-white/15">
-            {employee.onboardingDocuments.map((d) => (
-              <DocumentRow
-                key={d.id}
-                document={d}
-                employeeId={employee.id}
-                editable={canEdit}
-              />
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h2 className="text-sm font-semibold">IT setup</h2>
-          <ul className="mt-2 rounded-xl border border-black/10 dark:border-white/15">
-            {employee.itTasks.map((t) => (
-              <ITTaskRow key={t.id} task={t} employeeId={employee.id} editable={canEdit} />
-            ))}
-          </ul>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Onboarding documents</CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
+            <ul>
+              {employee.onboardingDocuments.map((d) => (
+                <DocumentRow
+                  key={d.id}
+                  document={d}
+                  employeeId={employee.id}
+                  editable={canEdit}
+                />
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>IT setup</CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
+            <ul>
+              {employee.itTasks.map((t) => (
+                <ITTaskRow key={t.id} task={t} employeeId={employee.id} editable={canEdit} />
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       </div>
 
-      <div>
-        <h2 className="text-sm font-semibold">Lifecycle history</h2>
-        <ul className="mt-2 space-y-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Lifecycle history</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
           {employee.statusHistory.map((h) => (
-            <li
-              key={h.id}
-              className="rounded-md border border-black/10 p-3 text-sm dark:border-white/15"
-            >
+            <div key={h.id} className="rounded-lg border p-3 text-sm">
               <div>
                 {h.previousStatus ? `${h.previousStatus.replaceAll("_", " ")} → ` : "Created at "}
                 {h.newStatus.replaceAll("_", " ")}
               </div>
-              {h.reason && (
-                <div className="text-black/60 dark:text-white/60">{h.reason}</div>
-              )}
-              <div className="text-xs text-black/40 dark:text-white/40">
+              {h.reason && <div className="text-muted-foreground">{h.reason}</div>}
+              <div className="text-xs text-muted-foreground/70">
                 {h.changedAt.toLocaleString(undefined, { timeZone: "UTC" })} UTC
               </div>
-            </li>
+            </div>
           ))}
           {employee.statusHistory.length === 0 && (
-            <li className="text-sm text-black/50 dark:text-white/50">No history yet.</li>
+            <p className="text-sm text-muted-foreground">No history yet.</p>
           )}
-        </ul>
-      </div>
+        </CardContent>
+      </Card>
 
       {canEdit && (
-        <div>
-          <h2 className="text-sm font-semibold">Recent field changes</h2>
-          <ul className="mt-2 space-y-1">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent field changes</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1.5">
             {recentChanges.map((c) => (
-              <li key={c.id} className="text-xs text-black/60 dark:text-white/60">
-                <span className="font-medium">{c.field}</span>: {c.oldValue ?? "—"} →{" "}
-                {c.newValue ?? "—"} ({c.changedAt.toLocaleString(undefined, { timeZone: "UTC" })} UTC)
-              </li>
+              <p key={c.id} className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{c.field}</span>: {c.oldValue ?? "—"}{" "}
+                → {c.newValue ?? "—"} (
+                {c.changedAt.toLocaleString(undefined, { timeZone: "UTC" })} UTC)
+              </p>
             ))}
             {recentChanges.length === 0 && (
-              <li className="text-sm text-black/50 dark:text-white/50">No changes recorded yet.</li>
+              <p className="text-sm text-muted-foreground">No changes recorded yet.</p>
             )}
-          </ul>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

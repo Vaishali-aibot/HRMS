@@ -2,12 +2,13 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
+import { FormField } from "@/components/form-field";
 import { submitSelfReview, type PerformanceReviewState } from "@/lib/actions/performance-review";
 
 const initialState: PerformanceReviewState = {};
-
-const ratingSelectClass =
-  "rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20";
 
 export function SelfReviewForm({
   cycleId,
@@ -19,16 +20,18 @@ export function SelfReviewForm({
   const [state, formAction, pending] = useActionState(submitSelfReview, initialState);
 
   return (
-    <form
-      action={formAction}
-      className="mt-2 space-y-3 rounded-xl border border-black/10 p-4 dark:border-white/15"
-    >
+    <form action={formAction} className="mt-2 flex flex-col gap-3 rounded-lg border p-4">
       <input type="hidden" name="cycleId" value={cycleId} />
       <p className="text-sm font-semibold">Submit self-review</p>
       {goals.map((goal) => (
         <label key={goal.id} className="flex items-center justify-between gap-3 text-sm">
           <span>{goal.title}</span>
-          <select name={`selfRating_${goal.id}`} required defaultValue="" className={ratingSelectClass}>
+          <NativeSelect
+            name={`selfRating_${goal.id}`}
+            required
+            defaultValue=""
+            className="h-7 w-40 text-xs"
+          >
             <option value="" disabled>
               Rate 1-5
             </option>
@@ -37,25 +40,18 @@ export function SelfReviewForm({
             <option value="3">3 — Meets expectations</option>
             <option value="4">4 — Exceeds expectations</option>
             <option value="5">5 — Outstanding</option>
-          </select>
+          </NativeSelect>
         </label>
       ))}
-      <label className="block text-sm">
-        Overall comments
-        <textarea
-          name="comments"
-          rows={3}
-          className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-      >
-        {pending ? "Submitting…" : "Submit self-review"}
-      </button>
-      {state.error && <p className="text-xs text-red-600 dark:text-red-400">{state.error}</p>}
+      <FormField label="Overall comments" htmlFor="comments">
+        <Textarea id="comments" name="comments" rows={3} />
+      </FormField>
+      <div>
+        <Button type="submit" variant="outline" disabled={pending}>
+          {pending ? "Submitting…" : "Submit self-review"}
+        </Button>
+      </div>
+      {state.error && <p className="text-xs text-destructive">{state.error}</p>}
     </form>
   );
 }

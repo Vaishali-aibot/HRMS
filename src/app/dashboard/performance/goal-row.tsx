@@ -2,6 +2,9 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { StatusBadge } from "@/components/status-badge";
 import { deleteGoal, updateGoalStatus, type GoalActionState } from "@/lib/actions/goal";
 
 const initialState: GoalActionState = {};
@@ -30,25 +33,19 @@ export function GoalRow({
   const [deleteState, deleteAction, deletePending] = useActionState(deleteGoal, initialState);
 
   return (
-    <li className="rounded-md border border-black/10 p-3 text-sm dark:border-white/15">
+    <li className="rounded-lg border p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="font-medium">{goal.title}</span>
           {goal.weight > 0 && (
-            <span className="ml-2 text-xs text-black/50 dark:text-white/50">
-              {goal.weight}% weight
-            </span>
+            <span className="ml-2 text-xs text-muted-foreground">{goal.weight}% weight</span>
           )}
         </div>
-        <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
-          {goal.status.replaceAll("_", " ")}
-        </span>
+        <StatusBadge status={goal.status} />
       </div>
-      {goal.description && (
-        <p className="mt-1 text-black/60 dark:text-white/60">{goal.description}</p>
-      )}
+      {goal.description && <p className="mt-1 text-muted-foreground">{goal.description}</p>}
       {(goal.selfRating || goal.managerRating) && (
-        <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+        <p className="mt-1 text-xs text-muted-foreground">
           {goal.selfRating && `Self rating: ${goal.selfRating}/5`}
           {goal.selfRating && goal.managerRating && " · "}
           {goal.managerRating && `Manager rating: ${goal.managerRating}/5`}
@@ -59,39 +56,27 @@ export function GoalRow({
         {canUpdateStatus && (
           <form action={statusAction} className="flex items-center gap-2">
             <input type="hidden" name="goalId" value={goal.id} />
-            <select
-              name="status"
-              defaultValue={goal.status}
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20"
-            >
-              <option value="NOT_STARTED">NOT STARTED</option>
-              <option value="IN_PROGRESS">IN PROGRESS</option>
-              <option value="COMPLETED">COMPLETED</option>
-            </select>
-            <button
-              type="submit"
-              disabled={statusPending}
-              className="rounded-md border border-black/15 px-2 py-1 text-xs hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-            >
+            <NativeSelect name="status" defaultValue={goal.status} className="h-7 w-32 text-xs">
+              <option value="NOT_STARTED">Not started</option>
+              <option value="IN_PROGRESS">In progress</option>
+              <option value="COMPLETED">Completed</option>
+            </NativeSelect>
+            <Button type="submit" variant="outline" size="xs" disabled={statusPending}>
               {statusPending ? "…" : "Update"}
-            </button>
+            </Button>
           </form>
         )}
         {canDelete && (
           <form action={deleteAction}>
             <input type="hidden" name="goalId" value={goal.id} />
-            <button
-              type="submit"
-              disabled={deletePending}
-              className="rounded-md border border-black/15 px-2 py-1 text-xs hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-            >
+            <Button type="submit" variant="outline" size="xs" disabled={deletePending}>
               {deletePending ? "…" : "Remove"}
-            </button>
+            </Button>
           </form>
         )}
       </div>
       {(statusState.error || deleteState.error) && (
-        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+        <p className="mt-1 text-xs text-destructive">
           {statusState.error || deleteState.error}
         </p>
       )}

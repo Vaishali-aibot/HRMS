@@ -2,27 +2,21 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { FormField } from "@/components/form-field";
 import { createEmployee, type CreateEmployeeState } from "@/lib/actions/employee";
 
 const initialState: CreateEmployeeState = {};
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="font-medium">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputClass =
-  "rounded-md border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20";
 
 type PotentialManager = {
   id: string;
@@ -42,80 +36,89 @@ export function NewEmployeeForm({
   const [state, formAction, pending] = useActionState(createEmployee, initialState);
 
   return (
-    <div className="mx-auto max-w-xl">
-      <h1 className="text-xl font-semibold">Add employee</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+    <div className="mx-auto max-w-2xl">
+      <h1 className="text-2xl font-semibold tracking-tight">Add employee</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
         Creates the Employee Master record and starts the lifecycle at{" "}
-        <code>PRE_BOARDING</code>. Compensation and statutory details are
-        entered separately once access-restricted fields are wired up.
+        <code className="rounded bg-muted px-1 py-0.5 text-xs">PRE_BOARDING</code>. Compensation
+        and statutory details are entered separately once access-restricted fields are wired up.
       </p>
 
-      <form action={formAction} className="mt-6 flex flex-col gap-4">
-        <Field label="Full name">
-          <input name="fullName" required className={inputClass} />
-        </Field>
-        <Field label="Personal email">
-          <input name="personalEmail" type="email" className={inputClass} />
-        </Field>
-        <Field label="Date of joining">
-          <input name="dateOfJoining" type="date" required className={inputClass} />
-        </Field>
-        <Field label="Probation period (days)">
-          <input
-            name="probationPeriodDays"
-            type="number"
-            min={1}
-            placeholder="90 (default)"
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Department">
-          <input name="department" required className={inputClass} />
-        </Field>
-        <Field label="Designation">
-          <input name="designation" required className={inputClass} />
-        </Field>
-        <Field label="Location">
-          <input name="location" className={inputClass} />
-        </Field>
-        <Field label="Employment type">
-          <select name="employmentType" defaultValue="FULL_TIME" className={inputClass}>
-            <option value="FULL_TIME">Full-time</option>
-            <option value="PART_TIME">Part-time</option>
-            <option value="CONTRACT">Contract</option>
-            <option value="INTERN">Intern</option>
-          </select>
-        </Field>
-        <Field label="Work mode">
-          <select name="workMode" defaultValue="ON_SITE" className={inputClass}>
-            <option value="ON_SITE">On-site</option>
-            <option value="REMOTE">Remote</option>
-            <option value="HYBRID">Hybrid</option>
-          </select>
-        </Field>
-        <Field label="Reporting manager (optional)">
-          <select name="reportingManagerId" defaultValue="" className={inputClass}>
-            <option value="">— None —</option>
-            {potentialManagers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.employeeCode} — {m.fullName}
-              </option>
-            ))}
-          </select>
-        </Field>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Employee details</CardTitle>
+          <CardDescription>Fields marked required must be filled in.</CardDescription>
+        </CardHeader>
+        <form action={formAction}>
+          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Full name" htmlFor="fullName">
+              <Input id="fullName" name="fullName" required />
+            </FormField>
+            <FormField label="Personal email" htmlFor="personalEmail">
+              <Input id="personalEmail" name="personalEmail" type="email" />
+            </FormField>
+            <FormField label="Date of joining" htmlFor="dateOfJoining">
+              <Input id="dateOfJoining" name="dateOfJoining" type="date" required />
+            </FormField>
+            <FormField label="Probation period (days)" htmlFor="probationPeriodDays">
+              <Input
+                id="probationPeriodDays"
+                name="probationPeriodDays"
+                type="number"
+                min={1}
+                placeholder="3 months (default)"
+              />
+            </FormField>
+            <FormField label="Department" htmlFor="department">
+              <Input id="department" name="department" required />
+            </FormField>
+            <FormField label="Designation" htmlFor="designation">
+              <Input id="designation" name="designation" required />
+            </FormField>
+            <FormField label="Location" htmlFor="location">
+              <Input id="location" name="location" />
+            </FormField>
+            <FormField label="Employment type" htmlFor="employmentType">
+              <NativeSelect id="employmentType" name="employmentType" defaultValue="FULL_TIME">
+                <option value="FULL_TIME">Full-time</option>
+                <option value="PART_TIME">Part-time</option>
+                <option value="CONTRACT">Contract</option>
+                <option value="INTERN">Intern</option>
+              </NativeSelect>
+            </FormField>
+            <FormField label="Work mode" htmlFor="workMode">
+              <NativeSelect id="workMode" name="workMode" defaultValue="ON_SITE">
+                <option value="ON_SITE">On-site</option>
+                <option value="REMOTE">Remote</option>
+                <option value="HYBRID">Hybrid</option>
+              </NativeSelect>
+            </FormField>
+            <FormField
+              label="Reporting manager (optional)"
+              htmlFor="reportingManagerId"
+              className="sm:col-span-2"
+            >
+              <NativeSelect id="reportingManagerId" name="reportingManagerId" defaultValue="">
+                <option value="">— None —</option>
+                {potentialManagers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.employeeCode} — {m.fullName}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
 
-        {state.error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="mt-2 rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
-        >
-          {pending ? "Saving…" : "Create employee"}
-        </button>
-      </form>
+            {state.error && (
+              <p className="text-sm text-destructive sm:col-span-2">{state.error}</p>
+            )}
+          </CardContent>
+          <CardFooter className="justify-end">
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Create employee"}
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
     </div>
   );
 }

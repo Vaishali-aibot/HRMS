@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
+import { Paperclip } from "lucide-react";
 
+import { Card, CardContent } from "@/components/ui/card";
+import { StatusBadge } from "@/components/status-badge";
+import { UploadDocumentForm } from "@/components/documents/upload-document-form";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { UploadDocumentForm } from "@/components/documents/upload-document-form";
 
 export default async function DocumentsPage() {
   const session = await auth();
@@ -18,8 +21,8 @@ export default async function DocumentsPage() {
   if (!employee) {
     return (
       <div>
-        <h1 className="text-xl font-semibold">My documents</h1>
-        <p className="mt-2 text-sm text-black/60 dark:text-white/60">
+        <h1 className="text-2xl font-semibold tracking-tight">My documents</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
           Your account isn&apos;t linked to an employee record yet — contact HR.
         </p>
       </div>
@@ -28,40 +31,37 @@ export default async function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-semibold">My documents</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+      <h1 className="text-2xl font-semibold tracking-tight">My documents</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
         Upload each required document below. HR reviews and approves them.
       </p>
-      <ul className="mt-4 space-y-3">
+      <div className="mt-6 flex flex-col gap-3">
         {employee.onboardingDocuments.map((d) => (
-          <li key={d.id} className="rounded-xl border border-black/10 p-4 dark:border-white/15">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">{d.type.replaceAll("_", " ")}</span>
-              <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
-                {d.status.replaceAll("_", " ")}
-              </span>
-            </div>
-            {d.fileName && (
-              <p className="mt-1 text-sm">
+          <Card key={d.id} size="sm">
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{d.type.replaceAll("_", " ")}</span>
+                <StatusBadge status={d.status} />
+              </div>
+              {d.fileName && (
                 <a
                   href={`/api/documents/${d.id}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="hover:underline"
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
                 >
+                  <Paperclip className="size-3.5" />
                   {d.fileName}
                 </a>
-              </p>
-            )}
-            <div className="mt-2">
+              )}
               <UploadDocumentForm documentId={d.id} />
-            </div>
-          </li>
+            </CardContent>
+          </Card>
         ))}
         {employee.onboardingDocuments.length === 0 && (
-          <li className="text-sm text-black/50 dark:text-white/50">Nothing to upload yet.</li>
+          <p className="text-sm text-muted-foreground">Nothing to upload yet.</p>
         )}
-      </ul>
+      </div>
     </div>
   );
 }

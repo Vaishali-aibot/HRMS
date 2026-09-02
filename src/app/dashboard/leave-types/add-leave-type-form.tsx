@@ -2,57 +2,61 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { FormField } from "@/components/form-field";
 import { createLeaveType, type LeaveTypeState } from "@/lib/actions/leave-type";
 
 const initialState: LeaveTypeState = {};
-
-const inputClass =
-  "rounded-md border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20";
 
 export function AddLeaveTypeForm() {
   const [state, formAction, pending] = useActionState(createLeaveType, initialState);
 
   return (
-    <form
-      action={formAction}
-      className="flex flex-wrap items-end gap-3 rounded-xl border border-black/10 p-4 dark:border-white/15"
-    >
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Name</span>
-        <input name="name" required className={inputClass} />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Annual days</span>
-        <input type="number" name="annualDays" min={0} step="0.5" required className={inputClass} />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Carry-forward limit</span>
-        <input
+    <form action={formAction} className="flex flex-wrap items-end gap-3 rounded-xl border p-4">
+      <FormField label="Name" htmlFor="name">
+        <Input id="name" name="name" required />
+      </FormField>
+      <FormField label="Annual days" htmlFor="annualDays">
+        <Input id="annualDays" type="number" name="annualDays" min={0} step="0.5" required />
+      </FormField>
+      <FormField label="Carry-forward limit" htmlFor="carryForwardLimit">
+        <Input
+          id="carryForwardLimit"
           type="number"
           name="carryForwardLimit"
           min={0}
           step="0.5"
           placeholder="0"
-          className={inputClass}
         />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Accrual</span>
-        <select name="accrualMethod" defaultValue="ANNUAL" className={inputClass}>
+      </FormField>
+      <FormField label="Accrual" htmlFor="accrualMethod">
+        <NativeSelect id="accrualMethod" name="accrualMethod" defaultValue="ANNUAL">
           <option value="ANNUAL">Annual (all at once)</option>
           <option value="MONTHLY">Monthly (1/12 per month)</option>
-        </select>
-      </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          <option value="QUARTERLY">Quarterly (1/4 per quarter)</option>
+        </NativeSelect>
+      </FormField>
+      <FormField
+        label="Monthly cap"
+        htmlFor="monthlyCap"
+        className="w-32"
       >
+        <Input
+          id="monthlyCap"
+          type="number"
+          name="monthlyCap"
+          min={0}
+          step="0.5"
+          placeholder="none"
+          title="Caps this type per calendar month instead of an annual pool (e.g. WFH)"
+        />
+      </FormField>
+      <Button type="submit" disabled={pending}>
         {pending ? "Adding…" : "Add leave type"}
-      </button>
-      {state.error && (
-        <p className="w-full text-sm text-red-600 dark:text-red-400">{state.error}</p>
-      )}
+      </Button>
+      {state.error && <p className="w-full text-sm text-destructive">{state.error}</p>}
     </form>
   );
 }

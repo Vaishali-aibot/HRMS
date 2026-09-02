@@ -2,6 +2,11 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { FormField } from "@/components/form-field";
 import { changeEmployeeStatus, type ChangeStatusState } from "@/lib/actions/employee-detail";
 
 const initialState: ChangeStatusState = {};
@@ -19,9 +24,6 @@ const STATUSES = [
   "ALUMNI",
 ] as const;
 
-const inputClass =
-  "rounded-md border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20";
-
 export function StatusChangeForm({
   employeeId,
   currentStatus,
@@ -32,40 +34,32 @@ export function StatusChangeForm({
   const [state, formAction, pending] = useActionState(changeEmployeeStatus, initialState);
 
   return (
-    <form
-      action={formAction}
-      className="rounded-xl border border-black/10 p-4 dark:border-white/15"
-    >
-      <h2 className="text-sm font-semibold">Lifecycle status</h2>
-      <input type="hidden" name="employeeId" value={employeeId} />
+    <Card>
+      <CardHeader>
+        <CardTitle>Lifecycle status</CardTitle>
+      </CardHeader>
+      <form action={formAction}>
+        <input type="hidden" name="employeeId" value={employeeId} />
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <FormField label="New status" htmlFor="newStatus" className="w-44">
+            <NativeSelect id="newStatus" name="newStatus" defaultValue={currentStatus}>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s.replaceAll("_", " ")}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <FormField label="Reason (optional)" htmlFor="reason" className="min-w-[12rem] flex-1">
+            <Input id="reason" name="reason" />
+          </FormField>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Updating…" : "Update status"}
+          </Button>
 
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">New status</span>
-          <select name="newStatus" defaultValue={currentStatus} className={inputClass}>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-1 flex-col gap-1 text-sm">
-          <span className="font-medium">Reason (optional)</span>
-          <input name="reason" className={inputClass} />
-        </label>
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          {pending ? "Updating…" : "Update status"}
-        </button>
-      </div>
-
-      {state.error && (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400">{state.error}</p>
-      )}
-    </form>
+          {state.error && <p className="w-full text-sm text-destructive">{state.error}</p>}
+        </CardContent>
+      </form>
+    </Card>
   );
 }

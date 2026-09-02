@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
+import { Upload } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { uploadOnboardingDocument, type UploadDocumentState } from "@/lib/actions/onboarding";
 import { ALLOWED_CONTENT_TYPES_LABEL, MAX_FILE_SIZE_LABEL } from "@/lib/document-upload";
 
@@ -18,19 +20,14 @@ export function UploadDocumentForm({ documentId }: { documentId: string }) {
         name="file"
         required
         accept="application/pdf,image/jpeg,image/png,image/webp"
-        className="text-xs"
+        className="max-w-56 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border file:border-input file:bg-transparent file:px-2 file:py-1 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted"
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-      >
+      <Button type="submit" variant="outline" size="xs" disabled={pending}>
+        <Upload />
         {pending ? "Uploading…" : "Upload"}
-      </button>
-      {state.error && (
-        <p className="w-full text-xs text-red-600 dark:text-red-400">{state.error}</p>
-      )}
-      <p className="w-full text-[11px] text-black/40 dark:text-white/40">
+      </Button>
+      {state.error && <p className="w-full text-xs text-destructive">{state.error}</p>}
+      <p className="w-full text-[11px] text-muted-foreground">
         {ALLOWED_CONTENT_TYPES_LABEL}, up to {MAX_FILE_SIZE_LABEL}.
       </p>
     </form>

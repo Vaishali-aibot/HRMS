@@ -1,5 +1,14 @@
 import Link from "next/link";
 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ChecklistProgress } from "@/components/checklist-progress";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, requireRoleForPage } from "@/lib/rbac";
 
@@ -21,55 +30,58 @@ export default async function ExitsPage() {
   });
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold">Exits</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        Everyone currently in their notice period, with exit checklist
-        progress. Open an employee to update individual items.
-      </p>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Exits</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Everyone currently in their notice period, with exit checklist
+          progress. Open an employee to update individual items.
+        </p>
+      </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-        <table className="w-full text-sm">
-          <thead className="bg-black/5 text-left dark:bg-white/5">
-            <tr>
-              <th className="px-4 py-2">Employee</th>
-              <th className="px-4 py-2">Department</th>
-              <th className="px-4 py-2">Last working day</th>
-              <th className="px-4 py-2">Checklist</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead>Last working day</TableHead>
+              <TableHead>Checklist</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {employees.map((e) => {
               const done = e.exitChecklistItems.filter((i) => i.status === "COMPLETED").length;
               return (
-                <tr key={e.id} className="border-t border-black/10 dark:border-white/10">
-                  <td className="px-4 py-2">
-                    <Link href={`/dashboard/employees/${e.id}`} className="hover:underline">
+                <TableRow key={e.id}>
+                  <TableCell>
+                    <Link
+                      href={`/dashboard/employees/${e.id}`}
+                      className="font-medium hover:underline"
+                    >
                       {e.fullName}
                     </Link>
-                    <div className="font-mono text-xs text-black/50 dark:text-white/50">
-                      {e.employeeCode}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2">{e.department}</td>
-                  <td className="px-4 py-2">
+                    <div className="font-mono text-xs text-muted-foreground">{e.employeeCode}</div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{e.department}</TableCell>
+                  <TableCell className="text-muted-foreground">
                     {e.lastWorkingDay?.toLocaleDateString(undefined, { timeZone: "UTC" }) ?? "—"}
-                  </td>
-                  <td className="px-4 py-2">
-                    {done} / {e.exitChecklistItems.length}
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell>
+                    <ChecklistProgress done={done} total={e.exitChecklistItems.length} />
+                  </TableCell>
+                </TableRow>
               );
             })}
             {employees.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+              <TableRow>
+                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
                   No one is currently exiting.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
