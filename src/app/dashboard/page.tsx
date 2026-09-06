@@ -15,15 +15,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatCard } from "@/components/stat-card";
+import { ResignationRequestRow } from "@/components/resignation-request-row";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES } from "@/lib/rbac";
-import { NOT_EXITABLE_STATUSES } from "@/lib/exit-constants";
 import { getRemainingForLeaveType } from "@/lib/leave-balance";
 import { todayUTC } from "@/lib/date-only";
-
-import { ResignForm } from "./resign-form";
-import { ResignationRequestRow } from "./resignation-request-row";
 
 function fmt(d: Date) {
   return d.toLocaleDateString(undefined, { timeZone: "UTC" });
@@ -45,14 +42,8 @@ export default async function DashboardPage() {
   const role = session.user.role;
 
   if (!HR_VIEW_ROLES.includes(role)) {
-    const isManager = role === "MANAGER";
     const [employee, leaveTypes] = await Promise.all([
-      prisma.employee.findUnique({
-        where: { userId: session.user.id },
-        include: {
-          resignationRequests: { orderBy: { createdAt: "desc" }, take: 5 },
-        },
-      }),
+      prisma.employee.findUnique({ where: { userId: session.user.id } }),
       prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     ]);
 
@@ -75,15 +66,6 @@ export default async function DashboardPage() {
           })
         )
       : [];
-
-    const teamResignationRequests =
-      isManager && employee
-        ? await prisma.resignationRequest.findMany({
-            where: { status: "PENDING", employee: { reportingManagerId: employee.id } },
-            orderBy: { createdAt: "asc" },
-            include: { employee: true },
-          })
-        : [];
 
     return (
       <div className="flex flex-col gap-6">
@@ -125,72 +107,6 @@ export default async function DashboardPage() {
             Your account isn&apos;t linked to an employee record yet — contact
             HR to enable leave and attendance self-service.
           </p>
-        )}
-
-        {employee &&
-          !NOT_EXITABLE_STATUSES.includes(
-            employee.status as (typeof NOT_EXITABLE_STATUSES)[number]
-          ) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Resign</CardTitle>
-                <CardDescription>
-                  Submits a request for your manager or HR to approve — it
-                  doesn&apos;t start your notice period until they do.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                <ResignForm />
-                {employee.resignationRequests.length > 0 && (
-                  <ul className="flex flex-col gap-2">
-                    {employee.resignationRequests.map((r) => (
-                      <ResignationRequestRow
-                        key={r.id}
-                        request={{
-                          id: r.id,
-                          resignationDate: fmt(r.resignationDate),
-                          noticePeriodDays: r.noticePeriodDays,
-                          reason: r.reason,
-                          status: r.status,
-                        }}
-                        canCancel
-                      />
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-        {isManager && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Team resignation requests</CardTitle>
-              <CardDescription>Awaiting your decision</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="flex flex-col gap-2">
-                {teamResignationRequests.map((r) => (
-                  <ResignationRequestRow
-                    key={r.id}
-                    request={{
-                      id: r.id,
-                      employeeName: r.employee.fullName,
-                      resignationDate: fmt(r.resignationDate),
-                      noticePeriodDays: r.noticePeriodDays,
-                      reason: r.reason,
-                      status: r.status,
-                    }}
-                    showEmployeeName
-                    canDecide
-                  />
-                ))}
-                {teamResignationRequests.length === 0 && (
-                  <EmptyRow>Nothing pending.</EmptyRow>
-                )}
-              </ul>
-            </CardContent>
-          </Card>
         )}
       </div>
     );

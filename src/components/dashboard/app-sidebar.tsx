@@ -12,6 +12,7 @@ import {
   Inbox,
   LayoutDashboard,
   ListChecks,
+  LogOut,
   ShieldCheck,
   Sparkles,
   Target,
@@ -54,6 +55,7 @@ const SELF_SERVICE: NavItem[] = [
   { href: "/dashboard/performance", label: "Performance", icon: Target },
   { href: "/dashboard/performance/pip", label: "PIP", icon: ListChecks },
   { href: "/dashboard/recognition", label: "Recognition", icon: Award },
+  { href: "/dashboard/resignation", label: "Resignation", icon: LogOut },
   { href: "/dashboard/requests", label: "Requests", icon: Inbox },
   { href: "/dashboard/assistant", label: "Assistant", icon: Sparkles },
 ];
