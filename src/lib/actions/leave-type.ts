@@ -13,7 +13,10 @@ const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
   annualDays: z.coerce.number().nonnegative("Must be zero or more"),
   carryForwardLimit: z.coerce.number().nonnegative("Must be zero or more").optional(),
-  accrualMethod: z.enum(["ANNUAL", "MONTHLY"]).optional(),
+  accrualMethod: z.enum(["ANNUAL", "MONTHLY", "QUARTERLY"]).optional(),
+  // If set, this type is capped per calendar month instead of drawing from
+  // an annual pool — see the LeaveType.monthlyCap schema comment.
+  monthlyCap: z.coerce.number().nonnegative("Must be zero or more").optional(),
 });
 
 export async function createLeaveType(
@@ -31,6 +34,7 @@ export async function createLeaveType(
     annualDays: formData.get("annualDays"),
     carryForwardLimit: formData.get("carryForwardLimit") || undefined,
     accrualMethod: formData.get("accrualMethod") || undefined,
+    monthlyCap: formData.get("monthlyCap") || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -47,6 +51,7 @@ export async function createLeaveType(
         annualDays: parsed.data.annualDays,
         carryForwardLimit: parsed.data.carryForwardLimit ?? 0,
         accrualMethod: parsed.data.accrualMethod ?? "ANNUAL",
+        monthlyCap: parsed.data.monthlyCap ?? null,
       },
     });
   } catch (err) {
@@ -62,7 +67,8 @@ const updateSchema = z.object({
   leaveTypeId: z.string().min(1),
   annualDays: z.coerce.number().nonnegative("Must be zero or more"),
   carryForwardLimit: z.coerce.number().nonnegative("Must be zero or more"),
-  accrualMethod: z.enum(["ANNUAL", "MONTHLY"]),
+  accrualMethod: z.enum(["ANNUAL", "MONTHLY", "QUARTERLY"]),
+  monthlyCap: z.coerce.number().nonnegative("Must be zero or more").optional(),
 });
 
 /**
@@ -93,6 +99,7 @@ export async function updateLeaveType(
     annualDays: formData.get("annualDays"),
     carryForwardLimit: formData.get("carryForwardLimit"),
     accrualMethod: formData.get("accrualMethod"),
+    monthlyCap: formData.get("monthlyCap") || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -102,12 +109,32 @@ export async function updateLeaveType(
   const isActive = formData.get("isActive") !== null;
 
   try {
+    // A type flagged marksAttendanceAsWFH (currently just WFH) is only
+    // ever capped per-month, never from an annual pool (see the schema
+    // comment on LeaveType.monthlyCap) — decideLeaveRequest routes it
+    // through the monthlyCap branch specifically because that flag is
+    // set. Blanking the Monthly cap field on this row would silently flip
+    // it onto the annual-pool branch instead, where its annualDays is 0,
+    // breaking every WFH approval org-wide until someone notices. Refuse
+    // the save rather than let that happen quietly.
+    const existing = await prisma.leaveType.findUnique({
+      where: { id: parsed.data.leaveTypeId },
+      select: { marksAttendanceAsWFH: true },
+    });
+    if (existing?.marksAttendanceAsWFH && parsed.data.monthlyCap == null) {
+      return {
+        error:
+          "This type marks attendance as WFH on approval and must keep a monthly cap set. Deactivate it instead of clearing the cap.",
+      };
+    }
+
     await prisma.leaveType.update({
       where: { id: parsed.data.leaveTypeId },
       data: {
         annualDays: parsed.data.annualDays,
         carryForwardLimit: parsed.data.carryForwardLimit,
         accrualMethod: parsed.data.accrualMethod,
+        monthlyCap: parsed.data.monthlyCap ?? null,
         isActive,
       },
     });

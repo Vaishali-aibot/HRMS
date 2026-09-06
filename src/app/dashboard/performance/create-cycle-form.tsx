@@ -2,51 +2,48 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/form-field";
 import { createPerformanceCycle, type PerformanceCycleState } from "@/lib/actions/performance-cycle";
 
 const initialState: PerformanceCycleState = {};
-
-const inputClass =
-  "w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20";
 
 export function CreateCycleForm() {
   const [state, formAction, pending] = useActionState(createPerformanceCycle, initialState);
 
   return (
-    <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <label className="text-sm">
-        Name
-        <input name="name" placeholder="e.g. H1 2026" required className={inputClass} />
-      </label>
-      <div />
-      <label className="text-sm">
-        Start date
-        <input type="date" name="startDate" required className={inputClass} />
-      </label>
-      <label className="text-sm">
-        End date
-        <input type="date" name="endDate" required className={inputClass} />
-      </label>
-      <label className="text-sm">
-        Self-review due (optional)
-        <input type="date" name="selfReviewDueDate" className={inputClass} />
-      </label>
-      <label className="text-sm">
-        Manager-review due (optional)
-        <input type="date" name="managerReviewDueDate" className={inputClass} />
-      </label>
-      <div className="sm:col-span-2">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          {pending ? "Creating…" : "Create cycle"}
-        </button>
-      </div>
-      {state.error && (
-        <p className="text-xs text-red-600 sm:col-span-2 dark:text-red-400">{state.error}</p>
-      )}
-    </form>
+    <Card>
+      <CardHeader>
+        <CardTitle>Create a cycle</CardTitle>
+      </CardHeader>
+      <form action={formAction}>
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="Name" htmlFor="name" className="sm:col-span-2">
+            <Input id="name" name="name" placeholder="e.g. H1 2026" required />
+          </FormField>
+          <FormField label="Start date" htmlFor="startDate">
+            <Input id="startDate" type="date" name="startDate" required />
+          </FormField>
+          <FormField label="End date" htmlFor="endDate">
+            <Input id="endDate" type="date" name="endDate" required />
+          </FormField>
+          <FormField label="Self-review due (optional)" htmlFor="selfReviewDueDate">
+            <Input id="selfReviewDueDate" type="date" name="selfReviewDueDate" />
+          </FormField>
+          <FormField label="Manager-review due (optional)" htmlFor="managerReviewDueDate">
+            <Input id="managerReviewDueDate" type="date" name="managerReviewDueDate" />
+          </FormField>
+
+          {state.error && <p className="text-sm text-destructive sm:col-span-2">{state.error}</p>}
+        </CardContent>
+        <CardFooter className="justify-end">
+          <Button type="submit" disabled={pending}>
+            {pending ? "Creating…" : "Create cycle"}
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }

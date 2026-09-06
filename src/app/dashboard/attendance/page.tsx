@@ -1,9 +1,23 @@
 import { redirect } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { StatCard } from "@/components/stat-card";
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES } from "@/lib/rbac";
 import { DATE_ONLY_PATTERN, todayUTCString } from "@/lib/date-only";
+import { iconForAttendanceStatus } from "@/lib/attendance-status-icon";
 
 import { AttendanceRow } from "./attendance-row";
 import { CorrectionRequestRow } from "./correction-request-row";
@@ -79,97 +93,93 @@ export default async function AttendancePage({
 
     managementSection = (
       <>
-        <div>
-          <h2 className="text-sm font-semibold">
-            {isHRView ? "All employees" : "My team"}
-          </h2>
-          <form method="get" className="mt-3 flex items-center gap-2 text-sm">
-            <label className="flex items-center gap-2">
-              <span>Date</span>
-              <input
+        <Card>
+          <CardHeader>
+            <CardTitle>{isHRView ? "All employees" : "My team"}</CardTitle>
+            {!canEditTable && (
+              <CardDescription>
+                Read-only — only HR Admin/HR Executive can mark attendance directly.
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 px-0">
+            <form method="get" className="flex items-center gap-2 px-4">
+              <Input
                 type="date"
                 name="date"
                 defaultValue={selectedDateStr}
-                className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                className="w-40"
               />
-            </label>
-            <button
-              type="submit"
-              className="rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-            >
-              Go
-            </button>
-          </form>
+              <Button type="submit" variant="outline" size="sm">
+                Go
+              </Button>
+            </form>
 
-          {!canEditTable && (
-            <p className="mt-2 text-xs text-black/50 dark:text-white/50">
-              Read-only — only HR Admin/HR Executive can mark attendance directly.
-            </p>
-          )}
+            <div className="overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {employees.map((e) => (
+                    <AttendanceRow
+                      key={e.id}
+                      employee={e}
+                      date={selectedDateStr}
+                      currentStatus={statusByEmployee.get(e.id) ?? null}
+                      editable={canEditTable}
+                    />
+                  ))}
+                  {employees.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                        {isHRView ? "No employees yet." : "No direct reports yet."}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
 
-          <div className="mt-4 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-            <table className="w-full text-sm">
-              <thead className="bg-black/5 text-left dark:bg-white/5">
-                <tr>
-                  <th className="px-4 py-2">Employee ID</th>
-                  <th className="px-4 py-2">Name</th>
-                  <th className="px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((e) => (
-                  <AttendanceRow
-                    key={e.id}
-                    employee={e}
-                    date={selectedDateStr}
-                    currentStatus={statusByEmployee.get(e.id) ?? null}
-                    editable={canEditTable}
-                  />
-                ))}
-                {employees.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="px-4 py-8 text-center text-black/50 dark:text-white/50"
-                    >
-                      {isHRView ? "No employees yet." : "No direct reports yet."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div>
-          <h2 className="text-sm font-semibold">
-            {isHRView ? "Pending correction requests" : "Team corrections awaiting your decision"}
-          </h2>
-          <ul className="mt-2 space-y-2">
-            {pendingCorrections.map((r) => (
-              <CorrectionRequestRow
-                key={r.id}
-                request={{
-                  id: r.id,
-                  employeeName: r.employee.fullName,
-                  date: fmt(r.date),
-                  currentStatus: r.currentStatus,
-                  requestedStatus: r.requestedStatus,
-                  reason: r.reason,
-                  status: r.status,
-                }}
-                showEmployeeName
-                // Management can see these (dashboard-level visibility, PRD
-                // §4.5) but only HR_ADMIN/HR_EXECUTIVE can decide org-wide
-                // ones; a manager can always decide their own team's.
-                canDecide={isManager || isHRWrite}
-              />
-            ))}
-            {pendingCorrections.length === 0 && (
-              <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
-            )}
-          </ul>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {isHRView ? "Pending correction requests" : "Team corrections awaiting your decision"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2">
+              {pendingCorrections.map((r) => (
+                <CorrectionRequestRow
+                  key={r.id}
+                  request={{
+                    id: r.id,
+                    employeeName: r.employee.fullName,
+                    date: fmt(r.date),
+                    currentStatus: r.currentStatus,
+                    requestedStatus: r.requestedStatus,
+                    reason: r.reason,
+                    status: r.status,
+                  }}
+                  showEmployeeName
+                  // Management can see these (dashboard-level visibility, PRD
+                  // §4.5) but only HR_ADMIN/HR_EXECUTIVE can decide org-wide
+                  // ones; a manager can always decide their own team's.
+                  canDecide={isManager || isHRWrite}
+                />
+              ))}
+              {pendingCorrections.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nothing pending.</p>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
       </>
     );
   }
@@ -177,7 +187,7 @@ export default async function AttendancePage({
   let personalSection: React.ReactNode;
   if (!ownEmployee) {
     personalSection = (
-      <p className="text-sm text-black/60 dark:text-white/60">
+      <p className="text-sm text-muted-foreground">
         Your account isn&apos;t linked to an employee record yet — contact HR.
       </p>
     );
@@ -198,40 +208,40 @@ export default async function AttendancePage({
     personalSection = (
       <>
         <div>
-          <h2 className="text-sm font-semibold">My attendance</h2>
-          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            My attendance —{" "}
             {now.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" })}
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          </h2>
+          <div className="mt-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {Object.entries(counts).map(([status, count]) => (
-              <div key={status} className="rounded-xl border border-black/10 p-3 dark:border-white/15">
-                <div className="text-lg font-semibold">{count}</div>
-                <div className="text-xs text-black/60 dark:text-white/60">
-                  {status.replaceAll("_", " ")}
-                </div>
-              </div>
+              <StatCard
+                key={status}
+                icon={iconForAttendanceStatus(status)}
+                label={status.replaceAll("_", " ")}
+                value={count}
+              />
             ))}
             {records.length === 0 && (
-              <p className="text-sm text-black/50 dark:text-white/50">
-                No attendance marked yet this month.
-              </p>
+              <p className="text-sm text-muted-foreground">No attendance marked yet this month.</p>
             )}
           </div>
         </div>
 
-        <div>
-          <h2 className="text-sm font-semibold">Check in for today</h2>
-          <p className="mt-1 text-xs text-black/50 dark:text-white/50">
-            Only affects today. Won&apos;t override a status HR or your manager already set.
-          </p>
-          <div className="mt-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Check in for today</CardTitle>
+            <CardDescription>
+              Only affects today. Won&apos;t override a status HR or your manager already set.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <SelfMarkForm />
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         <div>
-          <h2 className="text-sm font-semibold">Request a correction</h2>
-          <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+          <h2 className="text-sm font-semibold text-muted-foreground">Request a correction</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
             For a past date. Your manager (or HR) will review it.
           </p>
           <div className="mt-2">
@@ -239,35 +249,39 @@ export default async function AttendancePage({
           </div>
         </div>
 
-        <div>
-          <h2 className="text-sm font-semibold">My correction requests</h2>
-          <ul className="mt-2 space-y-2">
-            {ownEmployee.attendanceCorrectionRequests.map((r) => (
-              <CorrectionRequestRow
-                key={r.id}
-                request={{
-                  id: r.id,
-                  date: fmt(r.date),
-                  currentStatus: r.currentStatus,
-                  requestedStatus: r.requestedStatus,
-                  reason: r.reason,
-                  status: r.status,
-                }}
-                canCancel
-              />
-            ))}
-            {ownEmployee.attendanceCorrectionRequests.length === 0 && (
-              <li className="text-sm text-black/50 dark:text-white/50">No requests yet.</li>
-            )}
-          </ul>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>My correction requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2">
+              {ownEmployee.attendanceCorrectionRequests.map((r) => (
+                <CorrectionRequestRow
+                  key={r.id}
+                  request={{
+                    id: r.id,
+                    date: fmt(r.date),
+                    currentStatus: r.currentStatus,
+                    requestedStatus: r.requestedStatus,
+                    reason: r.reason,
+                    status: r.status,
+                  }}
+                  canCancel
+                />
+              ))}
+              {ownEmployee.attendanceCorrectionRequests.length === 0 && (
+                <p className="text-sm text-muted-foreground">No requests yet.</p>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
       </>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-xl font-semibold">Attendance</h1>
+    <div className="mx-auto flex max-w-3xl flex-col gap-8">
+      <h1 className="text-2xl font-semibold tracking-tight">Attendance</h1>
       {managementSection}
       {personalSection}
     </div>

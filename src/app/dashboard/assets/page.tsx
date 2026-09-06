@@ -1,3 +1,11 @@
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES, requireRoleForPage } from "@/lib/rbac";
 
@@ -27,25 +35,27 @@ export default async function AssetsPage() {
   const employeeNameById = new Map(employees.map((e) => [e.id, `${e.employeeCode} — ${e.fullName}`]));
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold">Assets</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        PRD §26 — register, assign, and track condition/damage history over
-        an asset&apos;s lifecycle (assigned, returned, condition updates,
-        retired, lost).
-      </p>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Assets</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          PRD §26 — register, assign, and track condition/damage history over
+          an asset&apos;s lifecycle (assigned, returned, condition updates,
+          retired, lost).
+        </p>
+      </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-        <table className="w-full text-sm">
-          <thead className="bg-black/5 text-left dark:bg-white/5">
-            <tr>
-              <th className="px-4 py-2">Asset ID</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Asset ID</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {assets.map((a) => (
               <AssetRow
                 // Keyed on status too — see the same reasoning on
@@ -68,18 +78,18 @@ export default async function AssetsPage() {
               />
             ))}
             {assets.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+              <TableRow>
+                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
                   No assets yet.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
-      <div className="mt-6">
-        <h2 className="text-sm font-semibold">Add an asset</h2>
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground">Add an asset</h2>
         <div className="mt-2">
           <AddAssetForm />
         </div>

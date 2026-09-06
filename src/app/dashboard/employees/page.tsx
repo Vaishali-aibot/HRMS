@@ -1,5 +1,16 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { StatusBadge } from "@/components/status-badge";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, requireRoleForPage } from "@/lib/rbac";
 
@@ -23,67 +34,68 @@ export default async function EmployeesPage() {
   });
 
   return (
-    <div>
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Employees</h1>
-        <Link
-          href="/dashboard/employees/new"
-          className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-black"
-        >
-          + Add employee
-        </Link>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
+          <p className="text-sm text-muted-foreground">
+            {employees.length} {employees.length === 1 ? "employee" : "employees"}
+          </p>
+        </div>
+        <Button nativeButton={false} render={<Link href="/dashboard/employees/new" />}>
+          <Plus />
+          Add employee
+        </Button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-        <table className="w-full text-sm">
-          <thead className="bg-black/5 text-left dark:bg-white/5">
-            <tr>
-              <th className="px-4 py-2">Employee ID</th>
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Department</th>
-              <th className="px-4 py-2">Designation</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Joined</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead>Designation</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Joined</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {employees.map((e) => (
-              <tr key={e.id} className="border-t border-black/10 dark:border-white/10">
-                <td className="px-4 py-2 font-mono text-xs">
+              <TableRow key={e.id}>
+                <TableCell className="font-mono text-xs">
                   <Link href={`/dashboard/employees/${e.id}`} className="hover:underline">
                     {e.employeeCode}
                   </Link>
-                </td>
-                <td className="px-4 py-2">
+                </TableCell>
+                <TableCell className="font-medium">
                   <Link href={`/dashboard/employees/${e.id}`} className="hover:underline">
                     {e.fullName}
                   </Link>
-                </td>
-                <td className="px-4 py-2">{e.department}</td>
-                <td className="px-4 py-2">{e.designation}</td>
-                <td className="px-4 py-2">
-                  <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
-                    {e.status.replaceAll("_", " ")}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
+                </TableCell>
+                <TableCell className="text-muted-foreground">{e.department}</TableCell>
+                <TableCell className="text-muted-foreground">{e.designation}</TableCell>
+                <TableCell>
+                  <StatusBadge status={e.status} />
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {/* dateOfJoining is stored as UTC midnight of the entered
                       calendar date (an <input type="date"> value parsed by
                       `new Date()`) — format in UTC too, or a server running
                       in a timezone behind UTC would display one day early. */}
                   {e.dateOfJoining.toLocaleDateString(undefined, { timeZone: "UTC" })}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
             {employees.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+              <TableRow>
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   No employees yet. Add your first employee to get started.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

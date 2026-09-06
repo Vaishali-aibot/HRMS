@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/status-badge";
 import {
   cancelLeaveRequest,
   decideLeaveRequest,
@@ -9,9 +11,6 @@ import {
 } from "@/lib/actions/leave";
 
 const initialState: LeaveActionState = {};
-
-const buttonClass =
-  "rounded-md border border-black/15 px-2 py-1 text-xs hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10";
 
 export function LeaveRequestRow({
   request,
@@ -49,53 +48,47 @@ export function LeaveRequestRow({
   const isPending = request.status === "PENDING";
 
   return (
-    <li className="rounded-md border border-black/10 p-3 text-sm dark:border-white/15">
+    <li className="rounded-lg border p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           {showEmployeeName && <span className="font-medium">{request.employeeName} · </span>}
-          {request.leaveTypeName}: {request.startDate} → {request.endDate} ({request.days} day
-          {request.days === 1 ? "" : "s"})
+          <span className="font-medium">{request.leaveTypeName}</span>: {request.startDate} →{" "}
+          {request.endDate} ({request.days} day{request.days === 1 ? "" : "s"})
         </div>
-        <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
-          {request.status}
-        </span>
+        <StatusBadge status={request.status} />
       </div>
-      {request.reason && (
-        <div className="mt-1 text-black/60 dark:text-white/60">{request.reason}</div>
-      )}
+      {request.reason && <p className="mt-1 text-muted-foreground">{request.reason}</p>}
 
       {canCancel && isPending && (
         <form action={cancelAction} className="mt-2">
           <input type="hidden" name="requestId" value={request.id} />
-          <button type="submit" disabled={cancelPending} className={buttonClass}>
+          <Button type="submit" variant="outline" size="xs" disabled={cancelPending}>
             {cancelPending ? "Cancelling…" : "Cancel"}
-          </button>
+          </Button>
         </form>
       )}
-      {cancelState.error && (
-        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{cancelState.error}</p>
-      )}
+      {cancelState.error && <p className="mt-1 text-xs text-destructive">{cancelState.error}</p>}
 
       {canDecide && isPending && (
         <div className="mt-2 flex gap-2">
           <form action={approveAction}>
             <input type="hidden" name="requestId" value={request.id} />
             <input type="hidden" name="decision" value="APPROVED" />
-            <button type="submit" disabled={approvePending} className={buttonClass}>
+            <Button type="submit" variant="outline" size="xs" disabled={approvePending}>
               {approvePending ? "…" : "Approve"}
-            </button>
+            </Button>
           </form>
           <form action={rejectAction}>
             <input type="hidden" name="requestId" value={request.id} />
             <input type="hidden" name="decision" value="REJECTED" />
-            <button type="submit" disabled={rejectPending} className={buttonClass}>
+            <Button type="submit" variant="outline" size="xs" disabled={rejectPending}>
               {rejectPending ? "…" : "Reject"}
-            </button>
+            </Button>
           </form>
         </div>
       )}
       {(approveState.error || rejectState.error) && (
-        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+        <p className="mt-1 text-xs text-destructive">
           {approveState.error || rejectState.error}
         </p>
       )}

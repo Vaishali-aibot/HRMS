@@ -2,6 +2,9 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { TableCell, TableRow } from "@/components/ui/table";
 import {
   updatePerformanceCycleStatus,
   type PerformanceCycleState,
@@ -23,35 +26,25 @@ export function CycleRow({
   const [state, formAction, pending] = useActionState(updatePerformanceCycleStatus, initialState);
 
   return (
-    <tr className="border-t border-black/10 dark:border-white/10">
-      <td className="px-4 py-2 font-medium">{cycle.name}</td>
-      <td className="px-4 py-2 text-black/60 dark:text-white/60">
+    <TableRow>
+      <TableCell className="font-medium">{cycle.name}</TableCell>
+      <TableCell className="text-muted-foreground">
         {cycle.startDate} → {cycle.endDate}
-      </td>
-      <td className="px-4 py-2">
+      </TableCell>
+      <TableCell>
         <form action={formAction} className="flex items-center gap-2">
           <input type="hidden" name="cycleId" value={cycle.id} />
-          <select
-            name="status"
-            defaultValue={cycle.status}
-            className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20"
-          >
-            <option value="DRAFT">DRAFT</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="CLOSED">CLOSED</option>
-          </select>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-md border border-black/15 px-2 py-1 text-xs hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-          >
+          <NativeSelect name="status" defaultValue={cycle.status} className="h-7 w-28 text-xs">
+            <option value="DRAFT">Draft</option>
+            <option value="ACTIVE">Active</option>
+            <option value="CLOSED">Closed</option>
+          </NativeSelect>
+          <Button type="submit" variant="outline" size="xs" disabled={pending}>
             {pending ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </form>
-        {state.error && (
-          <p className="mt-1 text-xs text-red-600 dark:text-red-400">{state.error}</p>
-        )}
-      </td>
-    </tr>
+        {state.error && <p className="mt-1 text-xs text-destructive">{state.error}</p>}
+      </TableCell>
+    </TableRow>
   );
 }

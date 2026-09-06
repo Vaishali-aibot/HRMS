@@ -2,12 +2,13 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { updateLeaveType, type LeaveTypeState } from "@/lib/actions/leave-type";
 
 const initialState: LeaveTypeState = {};
-
-const inputClass =
-  "w-20 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20";
 
 export function LeaveTypeRow({
   leaveType,
@@ -18,50 +19,64 @@ export function LeaveTypeRow({
     annualDays: number;
     carryForwardLimit: number;
     accrualMethod: string;
+    monthlyCap: number | null;
     isActive: boolean;
   };
 }) {
   const [state, formAction, pending] = useActionState(updateLeaveType, initialState);
 
   return (
-    <tr className="border-t border-black/10 dark:border-white/10">
-      <td className="px-4 py-2">{leaveType.name}</td>
-      <td className="px-4 py-2">
+    <TableRow>
+      <TableCell className="font-medium">{leaveType.name}</TableCell>
+      <TableCell>
         <form action={formAction} className="flex flex-wrap items-center gap-3">
           <input type="hidden" name="leaveTypeId" value={leaveType.id} />
           <label className="flex items-center gap-1 text-xs">
             Days
-            <input
+            <Input
               type="number"
               name="annualDays"
               min={0}
               step="0.5"
               defaultValue={leaveType.annualDays}
-              className={inputClass}
+              className="h-7 w-16 text-xs"
             />
           </label>
           <label className="flex items-center gap-1 text-xs">
             Carry-forward
-            <input
+            <Input
               type="number"
               name="carryForwardLimit"
               min={0}
               step="0.5"
               defaultValue={leaveType.carryForwardLimit}
               title="Max days carried into next year"
-              className={inputClass}
+              className="h-7 w-16 text-xs"
             />
           </label>
           <label className="flex items-center gap-1 text-xs">
             Accrual
-            <select
+            <NativeSelect
               name="accrualMethod"
               defaultValue={leaveType.accrualMethod}
-              className={inputClass}
+              className="h-7 w-28 text-xs"
             >
               <option value="ANNUAL">Annual</option>
               <option value="MONTHLY">Monthly</option>
-            </select>
+              <option value="QUARTERLY">Quarterly</option>
+            </NativeSelect>
+          </label>
+          <label className="flex items-center gap-1 text-xs" title="Caps this type per calendar month instead of an annual pool (e.g. WFH)">
+            Monthly cap
+            <Input
+              type="number"
+              name="monthlyCap"
+              min={0}
+              step="0.5"
+              placeholder="none"
+              defaultValue={leaveType.monthlyCap ?? ""}
+              className="h-7 w-16 text-xs"
+            />
           </label>
           <label className="flex items-center gap-1 text-xs">
             {/* No hidden "false" fallback needed — an unchecked checkbox
@@ -70,18 +85,12 @@ export function LeaveTypeRow({
             <input type="checkbox" name="isActive" value="true" defaultChecked={leaveType.isActive} />
             Active
           </label>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-md border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-          >
+          <Button type="submit" variant="outline" size="xs" disabled={pending}>
             {pending ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </form>
-        {state.error && (
-          <p className="mt-1 text-xs text-red-600 dark:text-red-400">{state.error}</p>
-        )}
-      </td>
-    </tr>
+        {state.error && <p className="mt-1 text-xs text-destructive">{state.error}</p>}
+      </TableCell>
+    </TableRow>
   );
 }

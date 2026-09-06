@@ -2,15 +2,17 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
+import { FormField } from "@/components/form-field";
 import {
   submitManagerReview,
   type PerformanceReviewState,
 } from "@/lib/actions/performance-review";
 
 const initialState: PerformanceReviewState = {};
-
-const ratingSelectClass =
-  "rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20";
 
 export function ManagerReviewRow({
   employeeId,
@@ -30,75 +32,75 @@ export function ManagerReviewRow({
   const [state, formAction, pending] = useActionState(submitManagerReview, initialState);
 
   return (
-    <li className="rounded-xl border border-black/10 p-4 text-sm dark:border-white/15">
-      <div className="font-medium">
-        {employeeName} · {cycleName}
-      </div>
-      {selfComments && (
-        <p className="mt-1 text-black/60 dark:text-white/60">
-          <span className="font-medium">Self comments:</span> {selfComments}
-        </p>
-      )}
-      <form action={formAction} className="mt-3 space-y-3">
-        <input type="hidden" name="employeeId" value={employeeId} />
-        <input type="hidden" name="cycleId" value={cycleId} />
-        {goals.map((goal) => (
-          <label key={goal.id} className="flex items-center justify-between gap-3">
-            <span>
-              {goal.title}
-              {goal.selfRating && (
-                <span className="ml-2 text-xs text-black/50 dark:text-white/50">
-                  (self: {goal.selfRating}/5)
-                </span>
-              )}
-            </span>
-            <select
-              name={`managerRating_${goal.id}`}
+    <Card size="sm">
+      <CardContent className="flex flex-col gap-3">
+        <div className="font-medium">
+          {employeeName} · {cycleName}
+        </div>
+        {selfComments && (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Self comments:</span> {selfComments}
+          </p>
+        )}
+        <form action={formAction} className="flex flex-col gap-3">
+          <input type="hidden" name="employeeId" value={employeeId} />
+          <input type="hidden" name="cycleId" value={cycleId} />
+          {goals.map((goal) => (
+            <label key={goal.id} className="flex items-center justify-between gap-3 text-sm">
+              <span>
+                {goal.title}
+                {goal.selfRating && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    (self: {goal.selfRating}/5)
+                  </span>
+                )}
+              </span>
+              <NativeSelect
+                name={`managerRating_${goal.id}`}
+                required
+                defaultValue=""
+                className="h-7 w-24 text-xs"
+              >
+                <option value="" disabled>
+                  Rate 1-5
+                </option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </NativeSelect>
+            </label>
+          ))}
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium">Overall rating</span>
+            <NativeSelect
+              name="overallRating"
               required
               defaultValue=""
-              className={ratingSelectClass}
+              className="h-7 w-40 text-xs"
             >
               <option value="" disabled>
                 Rate 1-5
               </option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-            </select>
+              <option value="1">1 — Needs improvement</option>
+              <option value="2">2 — Below expectations</option>
+              <option value="3">3 — Meets expectations</option>
+              <option value="4">4 — Exceeds expectations</option>
+              <option value="5">5 — Outstanding</option>
+            </NativeSelect>
           </label>
-        ))}
-        <label className="flex items-center justify-between gap-3">
-          <span className="font-medium">Overall rating</span>
-          <select name="overallRating" required defaultValue="" className={ratingSelectClass}>
-            <option value="" disabled>
-              Rate 1-5
-            </option>
-            <option value="1">1 — Needs improvement</option>
-            <option value="2">2 — Below expectations</option>
-            <option value="3">3 — Meets expectations</option>
-            <option value="4">4 — Exceeds expectations</option>
-            <option value="5">5 — Outstanding</option>
-          </select>
-        </label>
-        <label className="block">
-          Overall comments
-          <textarea
-            name="comments"
-            rows={3}
-            className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          {pending ? "Submitting…" : "Submit manager review"}
-        </button>
-        {state.error && <p className="text-xs text-red-600 dark:text-red-400">{state.error}</p>}
-      </form>
-    </li>
+          <FormField label="Overall comments" htmlFor={`comments-${employeeId}-${cycleId}`}>
+            <Textarea id={`comments-${employeeId}-${cycleId}`} name="comments" rows={3} />
+          </FormField>
+          <div>
+            <Button type="submit" variant="outline" disabled={pending}>
+              {pending ? "Submitting…" : "Submit manager review"}
+            </Button>
+          </div>
+          {state.error && <p className="text-xs text-destructive">{state.error}</p>}
+        </form>
+      </CardContent>
+    </Card>
   );
 }

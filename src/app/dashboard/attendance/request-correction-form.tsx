@@ -2,6 +2,11 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { FormField } from "@/components/form-field";
 import {
   requestAttendanceCorrection,
   type CorrectionActionState,
@@ -20,9 +25,6 @@ const STATUSES = [
   "MISSING",
 ] as const;
 
-const inputClass =
-  "rounded-md border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20";
-
 export function RequestCorrectionForm() {
   const [state, formAction, pending] = useActionState(
     requestAttendanceCorrection,
@@ -30,38 +32,30 @@ export function RequestCorrectionForm() {
   );
 
   return (
-    <form
-      action={formAction}
-      className="flex flex-wrap items-end gap-3 rounded-xl border border-black/10 p-4 dark:border-white/15"
-    >
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Date</span>
-        <input type="date" name="date" required className={inputClass} />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Should be</span>
-        <select name="requestedStatus" className={inputClass}>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-sm">
-        <span className="font-medium">Reason</span>
-        <input name="reason" required className={inputClass} />
-      </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
-      >
-        {pending ? "Submitting…" : "Request correction"}
-      </button>
-      {state.error && (
-        <p className="w-full text-sm text-red-600 dark:text-red-400">{state.error}</p>
-      )}
-    </form>
+    <Card>
+      <form action={formAction}>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <FormField label="Date" htmlFor="date">
+            <Input id="date" type="date" name="date" required />
+          </FormField>
+          <FormField label="Should be" htmlFor="requestedStatus">
+            <NativeSelect id="requestedStatus" name="requestedStatus" className="w-40">
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s.replaceAll("_", " ")}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <FormField label="Reason" htmlFor="reason" className="min-w-[12rem] flex-1">
+            <Input id="reason" name="reason" required />
+          </FormField>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Submitting…" : "Request correction"}
+          </Button>
+          {state.error && <p className="w-full text-sm text-destructive">{state.error}</p>}
+        </CardContent>
+      </form>
+    </Card>
   );
 }

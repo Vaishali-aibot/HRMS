@@ -142,6 +142,12 @@ model Employee {
   directReports      Employee[]     @relation("ManagerReports")
 
   probationEndDate DateTime?
+  /// True once HR has extended this via extendProbation — lets a future
+  /// bulk recompute of probationEndDate (see the
+  /// 20260826090000_recompute_probation_end_dates migration and its
+  /// review-flagged risk) skip rows that were manually set rather than
+  /// silently overwriting an HR decision. Never set anywhere else.
+  probationExtendedManually Boolean @default(false)
   confirmationDate DateTime?
   noticePeriodDays Int?
   resignationDate  DateTime?
@@ -331,6 +337,9 @@ enum LeaveAccrualMethod {
   /// time it's touched, so no separate cron job is needed for this to stay
   /// current.
   MONTHLY
+  /// Same idea as MONTHLY but by quarter: `annualDays / 4` becomes
+  /// available at the start of each quarter.
+  QUARTERLY
 }
 
 model LeaveType {
@@ -341,6 +350,23 @@ model LeaveType {
   /// default for the 3 seeded types, preserving prior behavior).
   carryForwardLimit Float              @default(0)
   accrualMethod     LeaveAccrualMethod @default(ANNUAL)
+  /// If set, this type is capped per calendar month instead of drawing from
+  /// an annual pool (used for WFH: 2/month, not a growing yearly balance).
+  /// When set, `annualDays`/`accrualMethod`/`carryForwardLimit` are ignored
+  /// and no LeaveBalance row is ever created for this type — "remaining" is
+  /// computed on the fly from approved LeaveRequests in the target month
+  /// (see getMonthlyCapRemaining in src/lib/leave-balance.ts). Editable on
+  /// the leave-type admin form — but updateLeaveType (src/lib/actions/
+  /// leave-type.ts) refuses to null this out for a `marksAttendanceAsWFH`
+  /// row, since that would silently reroute its approvals onto the
+  /// annual-pool branch instead (where its annualDays is 0).
+  monthlyCap        Float?
+  /// True for exactly one type (WFH) — approving a request of this type
+  /// also writes WORK_FROM_HOME onto the employee's attendance record for
+  /// every covered date (see decideLeaveRequest). Not exposed on the
+  /// add/edit leave-type admin form — only meaningful for one seeded type,
+  /// so it's set via migration rather than inviting HR to create more.
+  marksAttendanceAsWFH Boolean          @default(false)
   isActive          Boolean            @default(true)
   createdAt         DateTime           @default(now())
 

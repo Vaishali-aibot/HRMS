@@ -56,10 +56,10 @@ export default async function PIPPage() {
   const canManage = isHRWrite || isManager;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <div>
-        <h1 className="text-xl font-semibold">Performance improvement plans</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+        <h1 className="text-2xl font-semibold tracking-tight">Performance improvement plans</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Independent of review cycles — a PIP can be started at any time by
           HR or an employee&apos;s reporting manager.
         </p>
@@ -67,18 +67,13 @@ export default async function PIPPage() {
 
       {canManage && (
         <>
-          <div>
-            <h2 className="text-sm font-semibold">Start a PIP</h2>
-            <div className="mt-2">
-              <CreatePIPForm employees={employeesForPicker} />
-            </div>
-          </div>
+          <CreatePIPForm employees={employeesForPicker} />
 
           <div>
-            <h2 className="text-sm font-semibold">
+            <h2 className="text-sm font-semibold text-muted-foreground">
               {isHRWrite ? "All PIPs" : "Your reports' PIPs"}
             </h2>
-            <ul className="mt-2 space-y-3">
+            <div className="mt-2 flex flex-col gap-3">
               {managedPips.map((p) => (
                 <PIPRow
                   key={p.id}
@@ -101,17 +96,17 @@ export default async function PIPPage() {
                 />
               ))}
               {managedPips.length === 0 && (
-                <li className="text-sm text-black/50 dark:text-white/50">None yet.</li>
+                <p className="text-sm text-muted-foreground">None yet.</p>
               )}
-            </ul>
+            </div>
           </div>
         </>
       )}
 
       {employee && (
         <div>
-          <h2 className="text-sm font-semibold">My PIPs</h2>
-          <ul className="mt-2 space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground">My PIPs</h2>
+          <div className="mt-2 flex flex-col gap-3">
             {myPips.map((p) => (
               <PIPRow
                 key={p.id}
@@ -133,9 +128,9 @@ export default async function PIPPage() {
               />
             ))}
             {myPips.length === 0 && (
-              <li className="text-sm text-black/50 dark:text-white/50">None — good news.</li>
+              <p className="text-sm text-muted-foreground">None — good news.</p>
             )}
-          </ul>
+          </div>
         </div>
       )}
     </div>

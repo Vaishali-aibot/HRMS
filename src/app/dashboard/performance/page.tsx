@@ -1,5 +1,16 @@
 import { redirect } from "next/navigation";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { StatusBadge } from "@/components/status-badge";
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES } from "@/lib/rbac";
@@ -78,28 +89,27 @@ export default async function PerformancePage() {
     : [];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <div>
-        <h1 className="text-xl font-semibold">Performance</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+        <h1 className="text-2xl font-semibold tracking-tight">Performance</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Set goals within an active review cycle, submit a self-review, and
           your manager rates and closes it out.
         </p>
       </div>
 
       {isHRWrite && (
-        <div>
-          <h2 className="text-sm font-semibold">Review cycles</h2>
-          <div className="mt-2 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-black/50 dark:text-white/50">
-                <tr>
-                  <th className="px-4 py-2">Name</th>
-                  <th className="px-4 py-2">Dates</th>
-                  <th className="px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
+        <div className="flex flex-col gap-4">
+          <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {cycles.map((c) => (
                   <CycleRow
                     // Keyed on status too: CycleRow's status <select> is an
@@ -120,111 +130,111 @@ export default async function PerformancePage() {
                   />
                 ))}
                 {cycles.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-3 text-black/50 dark:text-white/50">
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
                       No cycles yet.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-          <div className="mt-3">
-            <CreateCycleForm />
-          </div>
+          <CreateCycleForm />
         </div>
       )}
 
       {employee ? (
         activeCycles.length === 0 ? (
-          <p className="text-sm text-black/60 dark:text-white/60">
-            No active review cycle right now.
-          </p>
+          <p className="text-sm text-muted-foreground">No active review cycle right now.</p>
         ) : (
-          <div className="space-y-6">
-            <h2 className="text-sm font-semibold">My goals & self-review</h2>
+          <div className="flex flex-col gap-4">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              My goals & self-review
+            </h2>
             {activeCycles.map((cycle) => {
               const goals = myGoals.filter((g) => g.cycleId === cycle.id);
               const review = myReviews.find((r) => r.cycleId === cycle.id);
               const locked = review && review.status !== "NOT_STARTED";
 
               return (
-                <div key={cycle.id} className="rounded-xl border border-black/10 p-4 dark:border-white/15">
-                  <div className="font-medium">{cycle.name}</div>
-                  <ul className="mt-2 space-y-2">
-                    {goals.map((g) => (
-                      <GoalRow
+                <Card key={cycle.id}>
+                  <CardHeader>
+                    <CardTitle>{cycle.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <ul className="flex flex-col gap-2">
+                      {goals.map((g) => (
                         // Same remount-on-change reasoning as CycleRow above
                         // — status is another uncontrolled <select>.
-                        key={`${g.id}:${g.status}`}
-                        goal={{
-                          id: g.id,
-                          title: g.title,
-                          description: g.description,
-                          weight: g.weight,
-                          status: g.status,
-                          selfRating: g.selfRating,
-                          managerRating: g.managerRating,
-                        }}
-                        canUpdateStatus={cycle.status === "ACTIVE"}
-                        canDelete={!locked}
+                        <GoalRow
+                          key={`${g.id}:${g.status}`}
+                          goal={{
+                            id: g.id,
+                            title: g.title,
+                            description: g.description,
+                            weight: g.weight,
+                            status: g.status,
+                            selfRating: g.selfRating,
+                            managerRating: g.managerRating,
+                          }}
+                          canUpdateStatus={cycle.status === "ACTIVE"}
+                          canDelete={!locked}
+                        />
+                      ))}
+                      {goals.length === 0 && (
+                        <p className="text-sm text-muted-foreground">No goals set yet.</p>
+                      )}
+                    </ul>
+                    {!locked && <AddGoalForm employeeId={employee.id} cycleId={cycle.id} />}
+                    {!locked && goals.length > 0 && (
+                      <SelfReviewForm
+                        cycleId={cycle.id}
+                        goals={goals.map((g) => ({ id: g.id, title: g.title }))}
                       />
-                    ))}
-                    {goals.length === 0 && (
-                      <li className="text-sm text-black/50 dark:text-white/50">
-                        No goals set yet.
-                      </li>
                     )}
-                  </ul>
-                  {!locked && (
-                    <div className="mt-3">
-                      <AddGoalForm employeeId={employee.id} cycleId={cycle.id} />
-                    </div>
-                  )}
-                  {!locked && goals.length > 0 && (
-                    <SelfReviewForm
-                      cycleId={cycle.id}
-                      goals={goals.map((g) => ({ id: g.id, title: g.title }))}
-                    />
-                  )}
-                  {review && review.status !== "NOT_STARTED" && (
-                    <div className="mt-3 rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
-                      <p>
-                        Self-review submitted{" "}
-                        {review.selfSubmittedAt && fmt(review.selfSubmittedAt)}.{" "}
-                        {review.status === "COMPLETED"
-                          ? `Manager review complete — overall rating ${review.managerOverallRating}/5.`
-                          : "Waiting on your manager's review."}
-                      </p>
-                      {review.selfComments && (
-                        <p className="mt-1 text-black/60 dark:text-white/60">
-                          <span className="font-medium">Your comments:</span>{" "}
-                          {review.selfComments}
+                    {review && review.status !== "NOT_STARTED" && (
+                      <div className="rounded-lg bg-muted/50 p-3 text-sm">
+                        <p>
+                          Self-review submitted{" "}
+                          {review.selfSubmittedAt && fmt(review.selfSubmittedAt)}.{" "}
+                          {review.status === "COMPLETED"
+                            ? `Manager review complete — overall rating ${review.managerOverallRating}/5.`
+                            : "Waiting on your manager's review."}
                         </p>
-                      )}
-                      {review.managerComments && (
-                        <p className="mt-1 text-black/60 dark:text-white/60">
-                          <span className="font-medium">Manager comments:</span>{" "}
-                          {review.managerComments}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
+                        {review.selfComments && (
+                          <p className="mt-1 text-muted-foreground">
+                            <span className="font-medium text-foreground">Your comments:</span>{" "}
+                            {review.selfComments}
+                          </p>
+                        )}
+                        {review.managerComments && (
+                          <p className="mt-1 text-muted-foreground">
+                            <span className="font-medium text-foreground">
+                              Manager comments:
+                            </span>{" "}
+                            {review.managerComments}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
         )
       ) : (
-        <p className="text-sm text-black/60 dark:text-white/60">
+        <p className="text-sm text-muted-foreground">
           Your account isn&apos;t linked to an employee record yet — contact HR.
         </p>
       )}
 
       {(isManager || isHRWrite) && (
         <div>
-          <h2 className="text-sm font-semibold">Reviews awaiting your input</h2>
-          <ul className="mt-2 space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            Reviews awaiting your input
+          </h2>
+          <div className="mt-2 flex flex-col gap-3">
             {teamReviews.map((r) => (
               <ManagerReviewRow
                 key={r.id}
@@ -239,45 +249,51 @@ export default async function PerformancePage() {
               />
             ))}
             {teamReviews.length === 0 && (
-              <li className="text-sm text-black/50 dark:text-white/50">Nothing pending.</li>
+              <p className="text-sm text-muted-foreground">Nothing pending.</p>
             )}
-          </ul>
+          </div>
         </div>
       )}
 
       {canViewOrgWide && (
-        <div>
-          <h2 className="text-sm font-semibold">All reviews</h2>
-          <div className="mt-2 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-black/50 dark:text-white/50">
-                <tr>
-                  <th className="px-4 py-2">Employee</th>
-                  <th className="px-4 py-2">Cycle</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Overall rating</th>
-                </tr>
-              </thead>
-              <tbody>
+        <Card>
+          <CardHeader>
+            <CardTitle>All reviews</CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Cycle</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Overall rating</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {orgReviews.map((r) => (
-                  <tr key={r.id} className="border-t border-black/10 dark:border-white/10">
-                    <td className="px-4 py-2">{r.employee.fullName}</td>
-                    <td className="px-4 py-2">{r.cycle.name}</td>
-                    <td className="px-4 py-2">{r.status.replaceAll("_", " ")}</td>
-                    <td className="px-4 py-2">{r.managerOverallRating ?? "—"}</td>
-                  </tr>
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium">{r.employee.fullName}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.cycle.name}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={r.status} />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {r.managerOverallRating ?? "—"}
+                    </TableCell>
+                  </TableRow>
                 ))}
                 {orgReviews.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-3 text-black/50 dark:text-white/50">
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
                       No reviews yet.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

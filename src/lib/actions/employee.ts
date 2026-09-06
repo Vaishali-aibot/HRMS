@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES, requireRole } from "@/lib/rbac";
 import { DocumentType, ITTaskType } from "@/generated/prisma/enums";
 import { DEFAULT_LEAVE_TYPES, ensureLeaveBalance } from "@/lib/leave-balance";
+import { addMonthsClamped } from "@/lib/date-only";
 
 const createEmployeeSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
@@ -24,11 +25,13 @@ const createEmployeeSchema = z.object({
   reportingManagerId: z.string().optional().or(z.literal("")),
   // Probation start is implicitly dateOfJoining (PRD §16 — no separate
   // model field for it); this is just the duration used to calculate
-  // probationEndDate. Blank = the 90-day company default.
+  // probationEndDate. Blank = the 3-calendar-month company default (see
+  // DEFAULT_PROBATION_MONTHS below) — a custom value here is always in
+  // exact days, not months, since that's what the field asks for.
   probationPeriodDays: z.coerce.number().int().positive().optional(),
 });
 
-const DEFAULT_PROBATION_DAYS = 90;
+const DEFAULT_PROBATION_MONTHS = 3;
 
 export type CreateEmployeeState = {
   error?: string;
@@ -70,10 +73,22 @@ export async function createEmployee(
   const data = parsed.data;
   const reportingManagerId = data.reportingManagerId || undefined;
   const dateOfJoining = new Date(data.dateOfJoining);
-  const probationEndDate = new Date(dateOfJoining);
-  probationEndDate.setUTCDate(
-    probationEndDate.getUTCDate() + (data.probationPeriodDays ?? DEFAULT_PROBATION_DAYS)
-  );
+  let probationEndDate: Date;
+  if (data.probationPeriodDays != null) {
+    // Explicit override — always exact days, since that's what the field
+    // label asks for.
+    probationEndDate = new Date(dateOfJoining);
+    probationEndDate.setUTCDate(probationEndDate.getUTCDate() + data.probationPeriodDays);
+  } else {
+    // Default — calendar months, not a flat 90-day stand-in for "3 months"
+    // (which under/overshoots the actual 3-month mark by a day or two
+    // depending on which months are spanned). Uses addMonthsClamped, not
+    // plain setUTCMonth, so a month-end join date (e.g. Jan 31) clamps to
+    // the target month's last day (Apr 30) instead of rolling over into
+    // the next month (May 1) — matching what a SQL `+ INTERVAL '3
+    // months'` recompute would produce for the same join date.
+    probationEndDate = addMonthsClamped(dateOfJoining, DEFAULT_PROBATION_MONTHS);
+  }
 
   try {
     if (reportingManagerId) {
@@ -145,9 +160,14 @@ export async function createEmployee(
       });
 
       // Leave entitlement, same idea (PRD §14): give the new employee a
-      // balance for every active leave type for the current year.
+      // balance for every active leave type for the current year. Monthly-
+      // capped types (WFH) never get a LeaveBalance row — there's no
+      // annual pool to seed; "remaining" is computed fresh from approved
+      // requests instead (see getMonthlyCapRemaining).
       await tx.leaveType.createMany({ data: DEFAULT_LEAVE_TYPES, skipDuplicates: true });
-      const leaveTypes = await tx.leaveType.findMany({ where: { isActive: true } });
+      const leaveTypes = await tx.leaveType.findMany({
+        where: { isActive: true, monthlyCap: null },
+      });
       const currentYear = new Date().getFullYear();
       for (const leaveType of leaveTypes) {
         await ensureLeaveBalance(tx, employee.id, leaveType, currentYear);

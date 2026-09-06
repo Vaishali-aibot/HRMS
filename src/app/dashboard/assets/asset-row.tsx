@@ -2,6 +2,11 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { TableCell, TableRow } from "@/components/ui/table";
+import { StatusBadge } from "@/components/status-badge";
 import {
   assignAsset,
   reportAssetLost,
@@ -12,11 +17,6 @@ import {
 } from "@/lib/actions/asset";
 
 const initialState: AssetActionState = {};
-
-const inputClass =
-  "rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20";
-const buttonClass =
-  "rounded-md border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10";
 
 type EmployeeOption = { id: string; employeeCode: string; fullName: string };
 type HistoryEntry = {
@@ -57,29 +57,27 @@ export function AssetRow({
   const isEndOfLife = asset.status === "RETIRED" || asset.status === "LOST";
 
   return (
-    <tr className="border-t border-black/10 align-top dark:border-white/10">
-      <td className="px-4 py-2 font-mono text-xs">{asset.assetCode}</td>
-      <td className="px-4 py-2">
+    <TableRow>
+      <TableCell className="font-mono text-xs">{asset.assetCode}</TableCell>
+      <TableCell>
         {asset.type}
         {asset.serialNumber && (
-          <div className="text-xs text-black/50 dark:text-white/50">{asset.serialNumber}</div>
+          <div className="text-xs text-muted-foreground">{asset.serialNumber}</div>
         )}
-      </td>
-      <td className="px-4 py-2">
-        <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
-          {asset.status.replaceAll("_", " ")}
-        </span>
+      </TableCell>
+      <TableCell>
+        <StatusBadge status={asset.status} />
         {asset.assignedEmployee && (
-          <div className="mt-1 text-xs text-black/60 dark:text-white/60">
+          <div className="mt-1 text-xs text-muted-foreground">
             {asset.assignedEmployee.employeeCode} — {asset.assignedEmployee.fullName}
           </div>
         )}
-      </td>
-      <td className="px-4 py-2">
+      </TableCell>
+      <TableCell>
         {canAssign && (
           <form action={assignAction} className="flex items-center gap-2">
             <input type="hidden" name="assetId" value={asset.id} />
-            <select name="employeeId" defaultValue="" className={inputClass}>
+            <NativeSelect name="employeeId" defaultValue="" className="h-7 w-40 text-xs">
               <option value="" disabled>
                 Assign to…
               </option>
@@ -88,43 +86,48 @@ export function AssetRow({
                   {e.employeeCode} — {e.fullName}
                 </option>
               ))}
-            </select>
-            <button type="submit" disabled={assignPending} className={buttonClass}>
+            </NativeSelect>
+            <Button type="submit" variant="outline" size="xs" disabled={assignPending}>
               {assignPending ? "…" : "Assign"}
-            </button>
+            </Button>
           </form>
         )}
         {canReturn && (
           <form action={returnAction} className="flex items-center gap-2">
             <input type="hidden" name="assetId" value={asset.id} />
-            <input name="condition" placeholder="Condition (optional)" className={inputClass} />
-            <button type="submit" disabled={returnPending} className={buttonClass}>
+            <Input name="condition" placeholder="Condition (optional)" className="h-7 w-40 text-xs" />
+            <Button type="submit" variant="outline" size="xs" disabled={returnPending}>
               {returnPending ? "…" : "Mark returned"}
-            </button>
+            </Button>
           </form>
         )}
         {!isEndOfLife && (
           <form action={conditionAction} className="mt-2 flex items-center gap-2">
             <input type="hidden" name="assetId" value={asset.id} />
-            <input name="condition" placeholder="Condition/damage note" required className={inputClass} />
-            <button type="submit" disabled={conditionPending} className={buttonClass}>
+            <Input
+              name="condition"
+              placeholder="Condition/damage note"
+              required
+              className="h-7 w-40 text-xs"
+            />
+            <Button type="submit" variant="outline" size="xs" disabled={conditionPending}>
               {conditionPending ? "…" : "Log condition"}
-            </button>
+            </Button>
           </form>
         )}
         {!isEndOfLife && (
           <div className="mt-2 flex items-center gap-2">
             <form action={retireAction}>
               <input type="hidden" name="assetId" value={asset.id} />
-              <button type="submit" disabled={retirePending} className={buttonClass}>
+              <Button type="submit" variant="outline" size="xs" disabled={retirePending}>
                 {retirePending ? "…" : "Retire"}
-              </button>
+              </Button>
             </form>
             <form action={lostAction}>
               <input type="hidden" name="assetId" value={asset.id} />
-              <button type="submit" disabled={lostPending} className={buttonClass}>
+              <Button type="submit" variant="outline" size="xs" disabled={lostPending}>
                 {lostPending ? "…" : "Report lost"}
-              </button>
+              </Button>
             </form>
           </div>
         )}
@@ -133,7 +136,7 @@ export function AssetRow({
           conditionState.error ||
           retireState.error ||
           lostState.error) && (
-          <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+          <p className="mt-1 text-xs text-destructive">
             {assignState.error ||
               returnState.error ||
               conditionState.error ||
@@ -143,12 +146,12 @@ export function AssetRow({
         )}
         {asset.history.length > 0 && (
           <details className="mt-2">
-            <summary className="cursor-pointer text-xs text-black/50 dark:text-white/50">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
               History ({asset.history.length})
             </summary>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-1 flex flex-col gap-1">
               {asset.history.map((h) => (
-                <li key={h.id} className="text-xs text-black/60 dark:text-white/60">
+                <li key={h.id} className="text-xs text-muted-foreground">
                   {h.occurredAt}: {h.action.replaceAll("_", " ")}
                   {h.employeeName && ` — ${h.employeeName}`}
                   {h.condition && ` (${h.condition})`}
@@ -158,7 +161,7 @@ export function AssetRow({
             </ul>
           </details>
         )}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

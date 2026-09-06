@@ -1,3 +1,11 @@
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { prisma } from "@/lib/prisma";
 import { requireRoleForPage } from "@/lib/rbac";
 
@@ -22,27 +30,30 @@ export default async function UsersPage() {
   ]);
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold">User access</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        Roles control what each person can see and do. Linking a user to an
-        employee record is what makes leave/attendance self-service work for
-        them. Only people who have signed in at least once via Microsoft
-        appear here — everyone starts as <code>EMPLOYEE</code> on first
-        sign-in.
-      </p>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">User access</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Roles control what each person can see and do. Linking a user to an
+          employee record is what makes leave/attendance self-service work for
+          them. Only people who have signed in at least once via Microsoft
+          appear here — everyone starts as{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">EMPLOYEE</code>{" "}
+          on first sign-in.
+        </p>
+      </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-        <table className="w-full text-sm">
-          <thead className="bg-black/5 text-left dark:bg-white/5">
-            <tr>
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Linked employee record</th>
-              <th className="px-4 py-2">Role</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Linked employee record</TableHead>
+              <TableHead>Role</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {users.map((u) => (
               <UserRoleRow
                 key={u.id}
@@ -55,14 +66,14 @@ export default async function UsersPage() {
               />
             ))}
             {users.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+              <TableRow>
+                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
                   Nobody has signed in yet.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
