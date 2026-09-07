@@ -55,7 +55,7 @@ const SELF_SERVICE: NavItem[] = [
   { href: "/dashboard/performance", label: "Performance", icon: Target },
   { href: "/dashboard/performance/pip", label: "PIP", icon: ListChecks },
   { href: "/dashboard/recognition", label: "Recognition", icon: Award },
-  { href: "/dashboard/resignation", label: "Resignation", icon: LogOut },
+  { href: "/dashboard/exit", label: "Exit", icon: LogOut },
   { href: "/dashboard/requests", label: "Requests", icon: Inbox },
   { href: "/dashboard/assistant", label: "Assistant", icon: Sparkles },
 ];
@@ -63,7 +63,7 @@ const SELF_SERVICE: NavItem[] = [
 const HR_MANAGEMENT: NavItem[] = [
   { href: "/dashboard/employees", label: "Employees", icon: Users },
   { href: "/dashboard/onboarding", label: "Onboarding", icon: UserPlus },
-  { href: "/dashboard/exits", label: "Exits", icon: UserMinus },
+  { href: "/dashboard/offboarding", label: "Offboarding", icon: UserMinus },
   { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
 ];
 

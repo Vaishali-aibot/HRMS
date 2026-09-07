@@ -67,6 +67,7 @@ export async function submitResignationRequest(
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/exit");
   return {};
 }
 
@@ -167,7 +168,8 @@ export async function decideResignationRequest(
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/employees");
-  revalidatePath("/dashboard/exits");
+  revalidatePath("/dashboard/offboarding");
+  revalidatePath("/dashboard/exit");
   return {};
 }
 
@@ -213,5 +215,6 @@ export async function cancelResignationRequest(
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/exit");
   return {};
 }

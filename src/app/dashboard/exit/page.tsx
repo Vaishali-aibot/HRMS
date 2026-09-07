@@ -16,7 +16,7 @@ function EmptyRow({ children }: { children: React.ReactNode }) {
   return <li className="text-sm text-muted-foreground">{children}</li>;
 }
 
-export default async function ResignationPage() {
+export default async function ExitPage() {
   const session = await auth();
   if (!session?.user) {
     redirect("/sign-in");
@@ -47,7 +47,7 @@ export default async function ResignationPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Resignation</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Exit</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Submit and track your own resignation, and — if you manage people —
           decide on your team&apos;s requests.

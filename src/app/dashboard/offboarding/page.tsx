@@ -12,7 +12,7 @@ import { ChecklistProgress } from "@/components/checklist-progress";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, requireRoleForPage } from "@/lib/rbac";
 
-export default async function ExitsPage() {
+export default async function OffboardingPage() {
   await requireRoleForPage(...HR_VIEW_ROLES);
 
   const employees = await prisma.employee.findMany({
@@ -32,7 +32,7 @@ export default async function ExitsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Exits</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Offboarding</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Everyone currently in their notice period, with exit checklist
           progress. Open an employee to update individual items.

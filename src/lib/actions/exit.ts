@@ -122,7 +122,7 @@ export async function initiateExit(
 
   revalidatePath(`/dashboard/employees/${employeeId}`);
   revalidatePath("/dashboard/employees");
-  revalidatePath("/dashboard/exits");
+  revalidatePath("/dashboard/offboarding");
   redirect(`/dashboard/employees/${employeeId}`);
 }
 
@@ -169,6 +169,6 @@ export async function updateExitChecklistItem(
   }
 
   revalidatePath(`/dashboard/employees/${parsed.data.employeeId}`);
-  revalidatePath("/dashboard/exits");
+  revalidatePath("/dashboard/offboarding");
   return {};
 }
