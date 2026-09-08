@@ -412,6 +412,28 @@ npm run db:studio
 After that, use `/dashboard/users` in the app for every subsequent role
 change.
 
+## Testing
+
+```bash
+npm test        # run once
+npm run test:watch   # re-run on file changes
+```
+
+[Vitest](https://vitest.dev), covering pure business logic only —
+`src/lib/date-only.ts` (the DATE_ONLY convention's helpers, including the
+month-clamping math `probationEndDate` depends on) and
+`src/lib/leave-balance.ts`'s accrual/remaining-balance formulas (the exact
+code that's caused real staleness/regression bugs before — see git history
+around the WFH merge). No database, no React rendering, no Server Action
+tests yet.
+
+What this deliberately does **not** cover: any Server Action
+(`src/lib/actions/*.ts`), anything that touches Prisma, and every page/form
+component — those still rely on manual verification (click through the
+app, check the database) same as they always have. Adding real coverage
+there needs either a test database or Prisma mocking, which is a bigger
+lift than this first pass — a reasonable next step, not done here.
+
 ## Auth setup — Microsoft Entra ID (Azure AD)
 
 You (an admin on the dotkonnekt.com Microsoft 365 tenant) need to register
