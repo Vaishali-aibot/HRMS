@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +34,14 @@ export function NewEmployeeForm({
   // round trip needed to navigate away, so this state only ever needs to
   // carry an error.
   const [state, formAction, pending] = useActionState(createEmployee, initialState);
+  // Every required field already has the HTML `required` attribute, so the
+  // browser blocks submission on its own — but that's just a native
+  // per-field tooltip, easy to miss in a two-column layout if the invalid
+  // field has scrolled out of view, and it looks nothing like the styled
+  // error below for a server-side (Zod) validation failure. This mirrors
+  // that same message/styling for the native-validation case too, so a
+  // missed required field is never silently unclear.
+  const [clientError, setClientError] = useState<string | null>(null);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -49,7 +57,13 @@ export function NewEmployeeForm({
           <CardTitle>Employee details</CardTitle>
           <CardDescription>Fields marked required must be filled in.</CardDescription>
         </CardHeader>
-        <form action={formAction}>
+        <form
+          action={formAction}
+          onInvalidCapture={() =>
+            setClientError("Please fill in all required fields (marked above) before submitting.")
+          }
+          onSubmit={() => setClientError(null)}
+        >
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Full name" htmlFor="fullName">
               <Input id="fullName" name="fullName" required />
@@ -108,8 +122,10 @@ export function NewEmployeeForm({
               </NativeSelect>
             </FormField>
 
-            {state.error && (
-              <p className="text-sm text-destructive sm:col-span-2">{state.error}</p>
+            {(clientError || state.error) && (
+              <p className="text-sm text-destructive sm:col-span-2">
+                {clientError ?? state.error}
+              </p>
             )}
           </CardContent>
           <CardFooter className="justify-end">
