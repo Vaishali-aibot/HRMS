@@ -16,6 +16,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
       clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
       issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+      // Without this, Microsoft silently reuses whatever account already
+      // has an active session in the browser (SSO) — someone who needs to
+      // switch to a different dotkonnekt.com account has no way to do so
+      // short of an incognito window or manually signing out of Microsoft
+      // first. Forces the account picker every time instead. (Preserves
+      // the provider's default scope, which this otherwise overrides
+      // rather than merges.)
+      authorization: {
+        params: { scope: "openid profile email User.Read", prompt: "select_account" },
+      },
     }),
   ],
   session: {
