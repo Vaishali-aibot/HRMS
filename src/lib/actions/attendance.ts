@@ -167,12 +167,13 @@ export async function markOwnAttendanceToday(
     await prisma.$transaction(async (tx) => {
       const record = await tx.attendanceRecord.upsert({
         where: { employeeId_date: { employeeId: employee.id, date: today } },
-        update: { status: parsed.data.status, markedById: session.user.id },
+        update: { status: parsed.data.status, markedById: session.user.id, checkedInAt: new Date() },
         create: {
           employeeId: employee.id,
           date: today,
           status: parsed.data.status,
           markedById: session.user.id,
+          checkedInAt: new Date(),
         },
       });
 

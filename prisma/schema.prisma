@@ -141,17 +141,17 @@ model Employee {
   reportingManager   Employee?      @relation("ManagerReports", fields: [reportingManagerId], references: [id])
   directReports      Employee[]     @relation("ManagerReports")
 
-  probationEndDate DateTime?
+  probationEndDate          DateTime?
   /// True once HR has extended this via extendProbation — lets a future
   /// bulk recompute of probationEndDate (see the
   /// 20260826090000_recompute_probation_end_dates migration and its
   /// review-flagged risk) skip rows that were manually set rather than
   /// silently overwriting an HR decision. Never set anywhere else.
-  probationExtendedManually Boolean @default(false)
-  confirmationDate DateTime?
-  noticePeriodDays Int?
-  resignationDate  DateTime?
-  lastWorkingDay   DateTime?
+  probationExtendedManually Boolean   @default(false)
+  confirmationDate          DateTime?
+  noticePeriodDays          Int?
+  resignationDate           DateTime?
+  lastWorkingDay            DateTime?
 
   status                       EmploymentStatus              @default(PRE_BOARDING)
   statusHistory                EmployeeStatusHistory[]
@@ -343,13 +343,13 @@ enum LeaveAccrualMethod {
 }
 
 model LeaveType {
-  id                String             @id @default(cuid())
-  name              String             @unique
-  annualDays        Float
+  id                   String             @id @default(cuid())
+  name                 String             @unique
+  annualDays           Float
   /// Max unused days that carry into next year's balance. 0 = none (the
   /// default for the 3 seeded types, preserving prior behavior).
-  carryForwardLimit Float              @default(0)
-  accrualMethod     LeaveAccrualMethod @default(ANNUAL)
+  carryForwardLimit    Float              @default(0)
+  accrualMethod        LeaveAccrualMethod @default(ANNUAL)
   /// If set, this type is capped per calendar month instead of drawing from
   /// an annual pool (used for WFH: 2/month, not a growing yearly balance).
   /// When set, `annualDays`/`accrualMethod`/`carryForwardLimit` are ignored
@@ -360,15 +360,15 @@ model LeaveType {
   /// leave-type.ts) refuses to null this out for a `marksAttendanceAsWFH`
   /// row, since that would silently reroute its approvals onto the
   /// annual-pool branch instead (where its annualDays is 0).
-  monthlyCap        Float?
+  monthlyCap           Float?
   /// True for exactly one type (WFH) — approving a request of this type
   /// also writes WORK_FROM_HOME onto the employee's attendance record for
   /// every covered date (see decideLeaveRequest). Not exposed on the
   /// add/edit leave-type admin form — only meaningful for one seeded type,
   /// so it's set via migration rather than inviting HR to create more.
-  marksAttendanceAsWFH Boolean          @default(false)
-  isActive          Boolean            @default(true)
-  createdAt         DateTime           @default(now())
+  marksAttendanceAsWFH Boolean            @default(false)
+  isActive             Boolean            @default(true)
+  createdAt            DateTime           @default(now())
 
   balances           LeaveBalance[]
   requests           LeaveRequest[]
@@ -472,15 +472,19 @@ enum AttendanceStatus {
 /// of the calendar day (same convention as Employee.dateOfJoining) — always
 /// format for display with an explicit UTC timeZone.
 model AttendanceRecord {
-  id         String           @id @default(cuid())
-  employeeId String
-  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  date       DateTime
-  status     AttendanceStatus
-  notes      String?
-  markedById String? // User.id of the HR user who set this
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id          String           @id @default(cuid())
+  employeeId  String
+  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime
+  status      AttendanceStatus
+  notes       String?
+  markedById  String? // User.id of the HR user who set this
+  // Wall-clock moment of a self-service "check in for today" punch (see
+  // markOwnAttendanceToday) — null for records HR/a manager marked
+  // directly, or created via a correction, since those aren't a punch-in.
+  checkedInAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@unique([employeeId, date])
   @@index([employeeId])

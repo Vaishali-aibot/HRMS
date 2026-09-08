@@ -16,10 +16,11 @@ import { StatCard } from "@/components/stat-card";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES } from "@/lib/rbac";
-import { DATE_ONLY_PATTERN, todayUTCString } from "@/lib/date-only";
+import { DATE_ONLY_PATTERN, todayUTC, todayUTCString } from "@/lib/date-only";
 import { iconForAttendanceStatus } from "@/lib/attendance-status-icon";
 
 import { AttendanceRow } from "./attendance-row";
+import { CheckedInAtLabel } from "./checked-in-at-label";
 import { CorrectionRequestRow } from "./correction-request-row";
 import { RequestCorrectionForm } from "./request-correction-form";
 import { SelfMarkForm } from "./self-mark-form";
@@ -204,6 +205,8 @@ export default async function AttendancePage({
       acc[r.status] = (acc[r.status] ?? 0) + 1;
       return acc;
     }, {});
+    const todayTime = todayUTC().getTime();
+    const todayRecord = records.find((r) => r.date.getTime() === todayTime);
 
     personalSection = (
       <>
@@ -234,8 +237,11 @@ export default async function AttendancePage({
               Only affects today. Won&apos;t override a status HR or your manager already set.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-2">
             <SelfMarkForm />
+            {todayRecord?.checkedInAt && (
+              <CheckedInAtLabel checkedInAt={todayRecord.checkedInAt.toISOString()} />
+            )}
           </CardContent>
         </Card>
 
