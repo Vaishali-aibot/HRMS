@@ -19,6 +19,12 @@ jobs:
       # service is needed here. The test suite is unit tests only (see
       # README "Testing" section) for the same reason.
       - run: npm ci
+      # The app's own code (e.g. layout.tsx's `LayoutProps`) references
+      # Next.js's ambient route/layout types, normally written to
+      # .next/types by `next dev`/`next build` — neither of which runs in
+      # this job. `next typegen` generates just those types, with no DB or
+      # env vars needed, so tsc can actually resolve them here too.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm test
