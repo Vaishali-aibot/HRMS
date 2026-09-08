@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES } from "@/lib/rbac";
@@ -56,73 +57,79 @@ export default async function RecognitionPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold">Recognition</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+        <h1 className="text-2xl font-semibold tracking-tight">Recognition</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Give a teammate a shout-out. Visible to everyone — that&apos;s the
           point.
         </p>
       </div>
 
       {employee ? (
-        <div>
-          <h2 className="text-sm font-semibold">Give recognition</h2>
-          <div className="mt-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Give recognition</CardTitle>
+          </CardHeader>
+          <CardContent>
             <GiveRecognitionForm employees={employeesForPicker} />
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       ) : (
-        <p className="text-sm text-black/60 dark:text-white/60">
+        <p className="text-sm text-muted-foreground">
           Your account isn&apos;t linked to an employee record yet — contact HR.
         </p>
       )}
 
-      <div>
-        <h2 className="text-sm font-semibold">Top recognized (all-time)</h2>
-        <ol className="mt-2 space-y-1">
-          {leaderboard.map((entry, i) => (
-            <li key={entry.employee?.id ?? i} className="text-sm">
-              <span className="text-black/50 dark:text-white/50">{i + 1}.</span>{" "}
-              {entry.employee
-                ? `${entry.employee.employeeCode} — ${entry.employee.fullName}`
-                : "Unknown"}{" "}
-              <span className="text-black/50 dark:text-white/50">
-                — {entry.totalPoints} pts
-              </span>
-            </li>
-          ))}
-          {leaderboard.length === 0 && (
-            <li className="text-sm text-black/50 dark:text-white/50">
-              No recognition given yet.
-            </li>
-          )}
-        </ol>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Top recognized (all-time)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ol className="flex flex-col gap-1">
+            {leaderboard.map((entry, i) => (
+              <li key={entry.employee?.id ?? i} className="text-sm">
+                <span className="text-muted-foreground">{i + 1}.</span>{" "}
+                {entry.employee
+                  ? `${entry.employee.employeeCode} — ${entry.employee.fullName}`
+                  : "Unknown"}{" "}
+                <span className="text-muted-foreground">— {entry.totalPoints} pts</span>
+              </li>
+            ))}
+            {leaderboard.length === 0 && (
+              <li className="text-sm text-muted-foreground">No recognition given yet.</li>
+            )}
+          </ol>
+        </CardContent>
+      </Card>
 
-      <div>
-        <h2 className="text-sm font-semibold">Recent recognition</h2>
-        <ul className="mt-2 space-y-3">
-          {feed.map((r) => (
-            <RecognitionRow
-              key={r.id}
-              recognition={{
-                id: r.id,
-                fromName: r.fromEmployee.fullName,
-                toName: r.toEmployee.fullName,
-                category: r.category,
-                points: r.points,
-                message: r.message,
-                createdAt: fmt(r.createdAt),
-              }}
-              canDelete={isHRWrite || r.fromEmployee.userId === session.user.id}
-            />
-          ))}
-          {feed.length === 0 && (
-            <li className="text-sm text-black/50 dark:text-white/50">Nothing yet.</li>
-          )}
-        </ul>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent recognition</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="flex flex-col gap-3">
+            {feed.map((r) => (
+              <RecognitionRow
+                key={r.id}
+                recognition={{
+                  id: r.id,
+                  fromName: r.fromEmployee.fullName,
+                  toName: r.toEmployee.fullName,
+                  category: r.category,
+                  points: r.points,
+                  message: r.message,
+                  createdAt: fmt(r.createdAt),
+                }}
+                canDelete={isHRWrite || r.fromEmployee.userId === session.user.id}
+              />
+            ))}
+            {feed.length === 0 && (
+              <li className="text-sm text-muted-foreground">Nothing yet.</li>
+            )}
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   );
 }

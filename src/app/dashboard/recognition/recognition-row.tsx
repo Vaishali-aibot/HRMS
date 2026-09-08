@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { deleteRecognition, type RecognitionActionState } from "@/lib/actions/recognition";
 
 const initialState: RecognitionActionState = {};
@@ -33,33 +35,29 @@ export function RecognitionRow({
   const [state, formAction, pending] = useActionState(deleteRecognition, initialState);
 
   return (
-    <li className="rounded-xl border border-black/10 p-4 text-sm dark:border-white/15">
+    <li className="rounded-xl border p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="font-medium">{recognition.fromName}</span> recognized{" "}
           <span className="font-medium">{recognition.toName}</span>
         </div>
-        <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
+        <Badge variant="secondary">
           {CATEGORY_LABELS[recognition.category] ?? recognition.category} · {recognition.points} pts
-        </span>
+        </Badge>
       </div>
-      <p className="mt-1 text-black/70 dark:text-white/70">{recognition.message}</p>
+      <p className="mt-1 text-muted-foreground">{recognition.message}</p>
       <div className="mt-1 flex items-center justify-between">
-        <span className="text-xs text-black/40 dark:text-white/40">{recognition.createdAt}</span>
+        <span className="text-xs text-muted-foreground">{recognition.createdAt}</span>
         {canDelete && (
           <form action={formAction}>
             <input type="hidden" name="recognitionId" value={recognition.id} />
-            <button
-              type="submit"
-              disabled={pending}
-              className="text-xs text-black/50 hover:underline disabled:opacity-50 dark:text-white/50"
-            >
+            <Button type="submit" variant="ghost" size="xs" disabled={pending}>
               {pending ? "…" : "Remove"}
-            </button>
+            </Button>
           </form>
         )}
       </div>
-      {state.error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{state.error}</p>}
+      {state.error && <p className="mt-1 text-xs text-destructive">{state.error}</p>}
     </li>
   );
 }
