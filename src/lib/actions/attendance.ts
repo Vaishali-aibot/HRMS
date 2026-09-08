@@ -160,9 +160,11 @@ export async function markOwnAttendanceToday(
           "Today's attendance has already been recorded by HR/your manager — request a correction instead.",
       };
     }
-    if (existing && existing.status === parsed.data.status) {
-      return {};
-    }
+    // A same-status re-check-in is still a real "punch" for checkedInAt's
+    // purpose (that's the whole point of clicking it again later in the
+    // day) — only the AuditLog entry below is skipped for it, since that
+    // trail is specifically about status changes.
+    const statusChanged = !existing || existing.status !== parsed.data.status;
 
     await prisma.$transaction(async (tx) => {
       const record = await tx.attendanceRecord.upsert({
@@ -176,6 +178,8 @@ export async function markOwnAttendanceToday(
           checkedInAt: new Date(),
         },
       });
+
+      if (!statusChanged) return;
 
       await tx.auditLog.create({
         data: {
