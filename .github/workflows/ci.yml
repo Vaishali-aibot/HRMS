@@ -8,6 +8,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      # Only for the integration-test step below — a real, disposable
+      # Postgres container, not the flaky local `prisma dev` proxy some
+      # of these tests were originally hard to verify against locally.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hrms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hrms_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,9 +34,8 @@ jobs:
           node-version: 24
           cache: npm
       # `npm ci` runs postinstall -> `prisma generate`, which only reads
-      # schema.prisma — it doesn't need a live DATABASE_URL, so no database
-      # service is needed here. The test suite is unit tests only (see
-      # README "Testing" section) for the same reason.
+      # schema.prisma — it doesn't need a live DATABASE_URL, so this step
+      # itself doesn't depend on the postgres service being ready yet.
       - run: npm ci
       # The app's own code (e.g. layout.tsx's `LayoutProps`) references
       # Next.js's ambient route/layout types, normally written to
@@ -28,3 +46,5 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm test
+      - run: npx prisma migrate deploy
+      - run: npm run test:integration

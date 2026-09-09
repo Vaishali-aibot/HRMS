@@ -427,12 +427,40 @@ code that's caused real staleness/regression bugs before — see git history
 around the WFH merge). No database, no React rendering, no Server Action
 tests yet.
 
-What this deliberately does **not** cover: any Server Action
-(`src/lib/actions/*.ts`), anything that touches Prisma, and every page/form
-component — those still rely on manual verification (click through the
-app, check the database) same as they always have. Adding real coverage
-there needs either a test database or Prisma mocking, which is a bigger
-lift than this first pass — a reasonable next step, not done here.
+### Server Action integration tests
+
+```bash
+npm run test:integration
+```
+
+Separate from `npm test` (see `vitest.integration.config.mts`) because
+these need a **real, disposable Postgres database** — set `DATABASE_URL`
+in `.env.test.local` (gitignored, same convention as `.env.local`) to a
+throwaway database on your local Postgres before running this locally.
+`resetDb()` (`src/lib/test-helpers/db.ts`) truncates *every* table before
+each test, so never point this at anything you care about. In CI, the
+workflow provisions a real `postgres:17` service container and runs
+`prisma migrate deploy` against it automatically — no setup needed there.
+
+Covers the Server Actions with the most authorization/state-transition
+logic worth protecting: `src/lib/actions/resignation.ts` (submit/decide/
+cancel — the HR-vs-manager-vs-neither authorization matrix, the
+already-decided and already-exiting guards, and that approving actually
+moves the employee to NOTICE_PERIOD and seeds the exit checklist) and
+`src/lib/actions/attendance.ts`'s `markOwnAttendanceToday` (a regression
+test for the real "same-status re-check-in silently didn't update
+checkedInAt" bug fixed earlier).
+
+These call the Server Action functions directly (not over HTTP) with a
+mocked `@/lib/auth` (`vi.mock("@/lib/auth", ...)` — `auth()` needs a real
+Next.js request context otherwise) standing in for whoever's "signed in"
+per test.
+
+Still not covered: most other Server Actions, and every page/form
+component (still relies on manual verification — click through the app,
+check the database). Worth extending this same pattern to the rest of
+`src/lib/actions/*.ts` as a follow-up, rather than a reason to redo it
+differently.
 
 ## Auth setup — Microsoft Entra ID (Azure AD)
 
