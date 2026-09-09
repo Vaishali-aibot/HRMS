@@ -5,6 +5,7 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { auth, signOut } from "@/lib/auth";
 import { HR_VIEW_ROLES, HR_WRITE_ROLES } from "@/lib/rbac";
+import { getNotifications } from "@/lib/notifications";
 
 export default async function DashboardLayout({
   children,
@@ -19,6 +20,7 @@ export default async function DashboardLayout({
   const canViewRoster = HR_VIEW_ROLES.includes(session.user.role);
   const isHRWrite = HR_WRITE_ROLES.includes(session.user.role);
   const isAdmin = session.user.role === "HR_ADMIN";
+  const notifications = await getNotifications(session);
 
   return (
     <SidebarProvider>
@@ -34,6 +36,7 @@ export default async function DashboardLayout({
             "use server";
             await signOut({ redirectTo: "/sign-in" });
           }}
+          notifications={notifications}
         />
         <div className="flex-1 p-6">{children}</div>
       </SidebarInset>
