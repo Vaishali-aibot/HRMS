@@ -274,16 +274,29 @@ prisma/
    ```bash
    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    ```
-3. Get a Postgres database. Fastest path for local dev — a free
-   [Neon](https://neon.tech) project, or `npx prisma dev` for a local
-   throwaway Postgres. Put the connection string in `DATABASE_URL`.
-   `npx prisma dev` keeps running as its own process — leave it running in a
-   separate terminal alongside `npm run dev`. It prints the connection
-   string to use on startup (with `connection_limit=10` and a handful of
-   `..._timeout=0` params) — use that one verbatim rather than writing your
-   own; the wrong query params here (e.g. an ad-hoc `max=1`) will make any
-   page that fires more than one query at a time fail with "Connection
-   terminated unexpectedly".
+3. Get a Postgres database. Recommended: install PostgreSQL natively
+   (`winget install PostgreSQL.PostgreSQL.17` on Windows, or your platform's
+   package manager) and create a couple of dedicated databases for this
+   project, e.g.:
+   ```bash
+   psql -h localhost -U postgres -c "CREATE DATABASE hrms_dev;"
+   psql -h localhost -U postgres -c "CREATE DATABASE hrms_test;"
+   ```
+   Then set `DATABASE_URL="postgresql://postgres:postgres@localhost:5432/hrms_dev"`
+   (adjust user/password to match your install). A free [Neon](https://neon.tech)
+   project also works if you'd rather not install Postgres locally.
+
+   **Avoid `npx prisma dev`** for this project specifically — it's a
+   lightweight local proxy in front of an ephemeral Postgres, and in
+   practice it's been unreliable here: its connection/prepared-statement
+   handling gets out of sync under real traffic (including from
+   unmodified, pre-existing code — Auth.js's own session lookup, a
+   zero-argument `count()` — not anything project-specific), surfacing as
+   `Database error. Code: 08P01. Message: "bind message supplies N
+   parameters, but prepared statement requires M"`. This reproduced on a
+   completely fresh restart of both `prisma dev` and `next dev` together,
+   so it isn't accumulated state a restart clears — a real local Postgres
+   install (native or in Docker) sidesteps it entirely.
 4. Push the schema and generate the client:
    ```bash
    npm run db:migrate
