@@ -27,6 +27,16 @@ function formData(fields: Record<string, string>) {
   return fd;
 }
 
+/** submitResignationRequest reads `formData.get("reason")` with no
+ * null-to-undefined fallback (unlike decideResignationRequest's
+ * equivalent field) — never an issue from a real <form>, since a named
+ * form control always submits (as an empty string if untouched, never
+ * absent), but a manually-built FormData in a test has to reproduce
+ * that explicitly or zod's `.optional()` rejects the resulting `null`. */
+function submitFormData(fields: { resignationDate: string; noticePeriodDays: string; reason?: string }) {
+  return formData({ reason: "", ...fields });
+}
+
 beforeEach(async () => {
   await resetDb();
   vi.clearAllMocks();
@@ -39,7 +49,7 @@ describe("submitResignationRequest", () => {
 
     const result = await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30", reason: "moving on" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30", reason: "moving on" })
     );
 
     expect(result).toEqual({});
@@ -53,11 +63,11 @@ describe("submitResignationRequest", () => {
   it("rejects a second submission while one is already pending", async () => {
     const { session } = await createTestEmployee();
     signInAs(session);
-    await submitResignationRequest({}, formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" }));
+    await submitResignationRequest({}, submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" }));
 
     const result = await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-15", noticePeriodDays: "15" })
+      submitFormData({ resignationDate: "2026-12-15", noticePeriodDays: "15" })
     );
 
     expect(result.error).toMatch(/already have a pending resignation request/i);
@@ -69,7 +79,7 @@ describe("submitResignationRequest", () => {
 
     const result = await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
 
     expect(result.error).toMatch(/already been initiated/i);
@@ -80,7 +90,7 @@ describe("submitResignationRequest", () => {
 
     const result = await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
 
     expect(result.error).toMatch(/isn't linked to an employee record/i);
@@ -94,7 +104,7 @@ describe("decideResignationRequest", () => {
     signInAs(employeeSession);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
@@ -121,7 +131,7 @@ describe("decideResignationRequest", () => {
     signInAs(employeeSession);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
@@ -150,7 +160,7 @@ describe("decideResignationRequest", () => {
     signInAs(employeeSession);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
@@ -171,7 +181,7 @@ describe("decideResignationRequest", () => {
     signInAs(employeeSession);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
@@ -194,7 +204,7 @@ describe("decideResignationRequest", () => {
     signInAs(employeeSession);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
@@ -215,7 +225,7 @@ describe("decideResignationRequest", () => {
     signInAs(employeeSession);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
@@ -238,7 +248,7 @@ describe("cancelResignationRequest", () => {
     signInAs(session);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
@@ -257,7 +267,7 @@ describe("cancelResignationRequest", () => {
     signInAs(employeeSession);
     await submitResignationRequest(
       {},
-      formData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
+      submitFormData({ resignationDate: "2026-12-01", noticePeriodDays: "30" })
     );
     const request = await prisma.resignationRequest.findFirstOrThrow({
       where: { employeeId: employee.id },
