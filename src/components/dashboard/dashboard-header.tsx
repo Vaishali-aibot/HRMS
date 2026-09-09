@@ -23,7 +23,11 @@ export function DashboardHeader({
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <NotificationBell actionable={notifications.actionable} own={notifications.own} />
+        <NotificationBell
+          actionable={notifications.actionable}
+          own={notifications.own}
+          recentUpdates={notifications.recentUpdates}
+        />
         <form action={signOut}>
           <Button type="submit" variant="ghost" size="sm">
             <LogOut />

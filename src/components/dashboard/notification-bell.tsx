@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 
@@ -31,12 +32,23 @@ function NotificationList({ items }: { items: NotificationItem[] }) {
 export function NotificationBell({
   actionable,
   own,
+  recentUpdates,
 }: {
   actionable: NotificationItem[];
   own: NotificationItem[];
+  recentUpdates: NotificationItem[];
 }) {
   const badgeCount = actionable.length;
-  const isEmpty = actionable.length === 0 && own.length === 0;
+  const isEmpty = actionable.length === 0 && own.length === 0 && recentUpdates.length === 0;
+
+  const sections = [
+    { label: "Awaiting your decision", items: actionable },
+    { label: "Your pending requests", items: own },
+    // Approved/rejected within the last 7 days — otherwise an approval
+    // would silently vanish from "Your pending requests" (no longer
+    // PENDING) with nothing telling the employee what happened to it.
+    { label: "Recent updates", items: recentUpdates },
+  ].filter((section) => section.items.length > 0);
 
   return (
     <DropdownMenu>
@@ -59,19 +71,15 @@ export function NotificationBell({
         {isEmpty && (
           <DropdownMenuItem disabled>Nothing pending right now.</DropdownMenuItem>
         )}
-        {actionable.length > 0 && (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Awaiting your decision</DropdownMenuLabel>
-            <NotificationList items={actionable} />
-          </DropdownMenuGroup>
-        )}
-        {actionable.length > 0 && own.length > 0 && <DropdownMenuSeparator />}
-        {own.length > 0 && (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Your pending requests</DropdownMenuLabel>
-            <NotificationList items={own} />
-          </DropdownMenuGroup>
-        )}
+        {sections.map((section, i) => (
+          <Fragment key={section.label}>
+            {i > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{section.label}</DropdownMenuLabel>
+              <NotificationList items={section.items} />
+            </DropdownMenuGroup>
+          </Fragment>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
