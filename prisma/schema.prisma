@@ -600,6 +600,12 @@ enum ExitChecklistItemType {
   CLEARANCE
   EXIT_INTERVIEW
   FINAL_SETTLEMENT
+  // Two checkpoints on the same document, not one: HR sends the separation
+  // letter (with F&F terms) first, then the employee's signed copy comes
+  // back — tracked as separate steps like everything else here, rather than
+  // sub-status on one row.
+  SEPARATION_LETTER_SENT
+  SEPARATION_LETTER_RECEIVED
   EXPERIENCE_LETTER
   RELIEVING_LETTER
 }
