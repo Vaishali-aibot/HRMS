@@ -87,6 +87,9 @@ export default async function AttendancePage({
       }),
     ]);
     const statusByEmployee = new Map(records.map((r) => [r.employeeId, r.status]));
+    const checkedInAtByEmployee = new Map(
+      records.map((r) => [r.employeeId, r.checkedInAt?.toISOString() ?? null])
+    );
     // Editable for HR_WRITE_ROLES on any row; for a plain MANAGER the
     // table above is already scoped to their own reports, so every row
     // shown to them is one they're allowed to edit.
@@ -123,6 +126,7 @@ export default async function AttendancePage({
                     <TableHead>Employee ID</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Checked in</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -132,12 +136,13 @@ export default async function AttendancePage({
                       employee={e}
                       date={selectedDateStr}
                       currentStatus={statusByEmployee.get(e.id) ?? null}
+                      checkedInAt={checkedInAtByEmployee.get(e.id) ?? null}
                       editable={canEditTable}
                     />
                   ))}
                   {employees.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
                         {isHRView ? "No employees yet." : "No direct reports yet."}
                       </TableCell>
                     </TableRow>

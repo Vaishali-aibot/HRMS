@@ -25,11 +25,13 @@ export function AttendanceRow({
   employee,
   date,
   currentStatus,
+  checkedInAt,
   editable,
 }: {
   employee: { id: string; employeeCode: string; fullName: string };
   date: string;
   currentStatus: string | null;
+  checkedInAt: string | null;
   editable: boolean;
 }) {
   const [state, formAction, pending] = useActionState(markAttendance, initialState);
@@ -62,6 +64,17 @@ export function AttendanceRow({
           <StatusBadge status={currentStatus ?? "MISSING"} />
         )}
         {state.error && <p className="mt-1 text-xs text-destructive">{state.error}</p>}
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {/* Formatted client-side (this component is already "use client")
+            so it shows in the viewer's own timezone, not the server's —
+            same reasoning as CheckedInAtLabel on the self-service view. */}
+        {checkedInAt
+          ? new Date(checkedInAt).toLocaleTimeString(undefined, {
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : "—"}
       </TableCell>
     </TableRow>
   );
