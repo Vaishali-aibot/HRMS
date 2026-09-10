@@ -41,7 +41,10 @@ export default async function EmployeeDetailPage({
     include: {
       reportingManager: { select: { id: true, employeeCode: true, fullName: true } },
       statusHistory: { orderBy: { changedAt: "desc" } },
-      onboardingDocuments: { orderBy: { type: "asc" } },
+      onboardingDocuments: {
+        orderBy: { type: "asc" },
+        include: { accessLogs: { orderBy: { occurredAt: "desc" }, take: 10 } },
+      },
       itTasks: { orderBy: { type: "asc" } },
       exitChecklistItems: { orderBy: { type: "asc" } },
     },
@@ -53,7 +56,18 @@ export default async function EmployeeDetailPage({
 
   const canEdit = HR_WRITE_ROLES.includes(session.user.role);
 
-  const [potentialManagers, recentChanges] = await Promise.all([
+  // Access-log actorId is a plain User.id, not a Prisma relation (same
+  // loose-reference convention as changedById/approverId elsewhere), so
+  // resolve the names in one batch query rather than per-log.
+  const actorIds = [
+    ...new Set(
+      employee.onboardingDocuments.flatMap((d) =>
+        d.accessLogs.map((l) => l.actorId).filter((id): id is string => id !== null)
+      )
+    ),
+  ];
+
+  const [potentialManagers, recentChanges, actors] = await Promise.all([
     canEdit
       ? prisma.employee.findMany({
           where: { id: { not: employee.id } },
@@ -66,7 +80,14 @@ export default async function EmployeeDetailPage({
       orderBy: { changedAt: "desc" },
       take: 20,
     }),
+    canEdit && actorIds.length > 0
+      ? prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true, email: true } })
+      : Promise.resolve([]),
   ]);
+
+  const actorLabelById = new Map(actors.map((a) => [a.id, a.name ?? a.email]));
+  const actorLabel = (actorId: string | null) =>
+    actorId ? (actorLabelById.get(actorId) ?? "Unknown user") : "Unknown user";
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -197,6 +218,12 @@ export default async function EmployeeDetailPage({
                   document={d}
                   employeeId={employee.id}
                   editable={canEdit}
+                  history={d.accessLogs.map((l) => ({
+                    id: l.id,
+                    action: l.action,
+                    occurredAt: l.occurredAt.toISOString(),
+                    actorLabel: actorLabel(l.actorId),
+                  }))}
                 />
               ))}
             </ul>

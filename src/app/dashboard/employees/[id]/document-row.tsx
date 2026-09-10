@@ -24,10 +24,12 @@ export function DocumentRow({
   document,
   employeeId,
   editable,
+  history,
 }: {
   document: { id: string; type: string; status: string; fileName: string | null };
   employeeId: string;
   editable: boolean;
+  history?: { id: string; action: string; occurredAt: string; actorLabel: string }[];
 }) {
   const [state, formAction, pending] = useActionState(updateDocumentStatus, initialState);
 
@@ -74,6 +76,32 @@ export function DocumentRow({
             </a>
           )}
           <UploadDocumentForm documentId={document.id} />
+
+          {/* Who uploaded/viewed this document, and when (PRD §7/§30 —
+              these can be PAN/Aadhaar/bank proof, so this trail is
+              HR-only, same gate as everything else in this block). */}
+          <details className="rounded-md border text-xs">
+            <summary className="cursor-pointer select-none px-2 py-1.5 text-muted-foreground hover:text-foreground">
+              Access history {history && history.length > 0 ? `(${history.length})` : ""}
+            </summary>
+            <div className="border-t px-2 py-1.5">
+              {history && history.length > 0 ? (
+                <ul className="flex flex-col gap-1">
+                  {history.map((h) => (
+                    <li key={h.id} className="text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {h.action === "UPLOADED" ? "Uploaded" : "Viewed"}
+                      </span>{" "}
+                      by {h.actorLabel} ·{" "}
+                      {new Date(h.occurredAt).toLocaleString(undefined, { timeZone: "UTC" })} UTC
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">No recorded access yet.</p>
+              )}
+            </div>
+          </details>
         </div>
       )}
     </li>
