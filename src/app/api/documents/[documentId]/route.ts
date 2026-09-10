@@ -44,11 +44,24 @@ export async function GET(
     return new Response("File not found in storage", { status: 404 });
   }
 
+  // Best-effort: a logging failure shouldn't block an otherwise-authorized
+  // view of the document.
+  try {
+    await prisma.documentAccessLog.create({
+      data: { documentId: document.id, action: "VIEWED", actorId: session.user.id },
+    });
+  } catch (err) {
+    console.error("Failed to record document access log:", err);
+  }
+
   return new Response(blob.stream, {
     headers: {
       "Content-Type": blob.blob.contentType,
       "Content-Disposition": `inline; filename="${(document.fileName ?? "document").replaceAll('"', "")}"`,
       "Content-Length": String(blob.blob.size),
+      // These can be PAN/Aadhaar/bank proof — never let a browser or
+      // intermediary cache them to disk.
+      "Cache-Control": "no-store, private",
     },
   });
 }

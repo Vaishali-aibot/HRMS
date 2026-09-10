@@ -278,11 +278,36 @@ model OnboardingDocument {
   uploadedById String? // User.id — the employee themselves, or HR on their behalf
   uploadedAt   DateTime?
 
+  accessLogs DocumentAccessLog[]
+
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 
   @@unique([employeeId, type])
   @@index([employeeId])
+}
+
+enum DocumentAccessAction {
+  UPLOADED
+  VIEWED
+}
+
+/// Access trail for onboarding documents — these can be PAN/Aadhaar/bank
+/// proof (PRD §7/§30 restricted fields), so "who looked at this and when"
+/// is tracked independently of the generic field-change AuditLog above,
+/// which only covers old/new value edits, not file reads. Written by
+/// uploadOnboardingDocument (src/lib/actions/onboarding.ts) and the GET
+/// handler in src/app/api/documents/[documentId]/route.ts.
+model DocumentAccessLog {
+  id         String               @id @default(cuid())
+  documentId String
+  document   OnboardingDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  action     DocumentAccessAction
+  actorId    String? // User.id of whoever uploaded/viewed it
+  occurredAt DateTime             @default(now())
+
+  @@index([documentId])
+  @@index([occurredAt])
 }
 
 enum ITTaskType {

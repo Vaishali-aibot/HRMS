@@ -196,6 +196,16 @@ export async function uploadOnboardingDocument(
         console.error("Failed to delete replaced onboarding document blob:", cleanupErr);
       }
     }
+
+    // Best-effort: a logging failure shouldn't fail an otherwise-successful
+    // upload.
+    try {
+      await prisma.documentAccessLog.create({
+        data: { documentId, action: "UPLOADED", actorId: session.user.id },
+      });
+    } catch (logErr) {
+      console.error("Failed to record document access log:", logErr);
+    }
   } catch (err) {
     console.error("uploadOnboardingDocument failed:", err);
     return { error: "Something went wrong while uploading. Please try again." };
