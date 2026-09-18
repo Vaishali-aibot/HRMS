@@ -14,8 +14,18 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { StatCard } from "@/components/stat-card";
 import { ResignationRequestRow } from "@/components/resignation-request-row";
+import { UpcomingHolidaysCard } from "@/components/upcoming-holidays-card";
+import { BirthdaysThisMonthCard } from "@/components/birthdays-this-month-card";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES } from "@/lib/rbac";
@@ -40,6 +50,14 @@ export default async function DashboardPage() {
     redirect("/sign-in");
   }
   const role = session.user.role;
+
+  // Shown to everyone regardless of role, so fetched once here rather than
+  // duplicated in both branches below.
+  const upcomingHolidays = await prisma.holiday.findMany({
+    where: { date: { gte: todayUTC() } },
+    orderBy: { date: "asc" },
+    take: 10,
+  });
 
   if (!HR_VIEW_ROLES.includes(role)) {
     const [employee, leaveTypes] = await Promise.all([
@@ -108,6 +126,8 @@ export default async function DashboardPage() {
             HR to enable leave and attendance self-service.
           </p>
         )}
+
+        <UpcomingHolidaysCard holidays={upcomingHolidays} />
       </div>
     );
   }
@@ -115,27 +135,70 @@ export default async function DashboardPage() {
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // Same UTC-midnight month-bounds convention as the Attendance page.
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
 
-  const [total, active, newJoiners, onProbation, onNotice, pendingOnboarding, pendingResignations] =
-    await Promise.all([
-      prisma.employee.count(),
-      prisma.employee.count({ where: { status: "ACTIVE" } }),
-      prisma.employee.count({
-        // Upper-bounded so pre-boarding employees with a future joining
-        // date (a normal state per PRD §8) aren't counted as "new" yet.
-        where: { dateOfJoining: { gte: thirtyDaysAgo, lte: now } },
-      }),
-      prisma.employee.count({ where: { status: "PROBATION" } }),
-      prisma.employee.count({ where: { status: "NOTICE_PERIOD" } }),
-      prisma.employee.count({
-        where: { status: { in: ["PRE_BOARDING", "ONBOARDING"] } },
-      }),
-      prisma.resignationRequest.findMany({
-        where: { status: "PENDING" },
-        orderBy: { createdAt: "asc" },
-        include: { employee: true },
-      }),
-    ]);
+  const [
+    total,
+    active,
+    newJoiners,
+    onProbation,
+    onNotice,
+    pendingOnboarding,
+    pendingResignations,
+    onLeaveThisMonth,
+    employeesWithBirthday,
+  ] = await Promise.all([
+    prisma.employee.count(),
+    prisma.employee.count({ where: { status: "ACTIVE" } }),
+    prisma.employee.count({
+      // Upper-bounded so pre-boarding employees with a future joining
+      // date (a normal state per PRD §8) aren't counted as "new" yet.
+      where: { dateOfJoining: { gte: thirtyDaysAgo, lte: now } },
+    }),
+    prisma.employee.count({ where: { status: "PROBATION" } }),
+    prisma.employee.count({ where: { status: "NOTICE_PERIOD" } }),
+    prisma.employee.count({
+      where: { status: { in: ["PRE_BOARDING", "ONBOARDING"] } },
+    }),
+    prisma.resignationRequest.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+      include: { employee: true },
+    }),
+    // Approved leave that overlaps this calendar month at all — not just
+    // requests starting in it, so a leave spanning a month boundary still
+    // shows up (e.g. started 3 days ago, still running today).
+    prisma.leaveRequest.findMany({
+      where: {
+        status: "APPROVED",
+        startDate: { lte: monthEnd },
+        endDate: { gte: monthStart },
+      },
+      orderBy: { startDate: "asc" },
+      include: {
+        employee: { select: { id: true, employeeCode: true, fullName: true } },
+        leaveType: { select: { name: true } },
+      },
+    }),
+    // Prisma has no portable "match this month regardless of year" filter,
+    // so fetch everyone with a DOB on file and filter/sort by month+day in
+    // JS below — fine at HR-system scale, and avoids a raw SQL query for
+    // one date-part comparison.
+    prisma.employee.findMany({
+      where: { dateOfBirth: { not: null } },
+      select: { id: true, employeeCode: true, fullName: true, dateOfBirth: true },
+    }),
+  ]);
+
+  // The `where` above already excludes nulls at the DB level, but Prisma's
+  // return type doesn't narrow on that — filter with a type guard instead
+  // of a non-null assertion so this stays sound if that ever changes.
+  const birthdaysThisMonth = employeesWithBirthday
+    .filter((e): e is typeof e & { dateOfBirth: Date } => e.dateOfBirth !== null)
+    .filter((e) => e.dateOfBirth.getUTCMonth() === now.getUTCMonth())
+    .sort((a, b) => a.dateOfBirth.getUTCDate() - b.dateOfBirth.getUTCDate());
 
   return (
     <div className="flex flex-col gap-6">
@@ -159,30 +222,83 @@ export default async function DashboardPage() {
         <StatCard icon={ClipboardList} label="Pending onboarding" value={pendingOnboarding} />
       </div>
 
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending resignation requests</CardTitle>
+            <CardDescription>Awaiting HR decision</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2">
+              {pendingResignations.map((r) => (
+                <ResignationRequestRow
+                  key={r.id}
+                  request={{
+                    id: r.id,
+                    employeeName: r.employee.fullName,
+                    resignationDate: fmt(r.resignationDate),
+                    noticePeriodDays: r.noticePeriodDays,
+                    reason: r.reason,
+                    status: r.status,
+                  }}
+                  showEmployeeName
+                  canDecide
+                />
+              ))}
+              {pendingResignations.length === 0 && <EmptyRow>Nothing pending.</EmptyRow>}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <UpcomingHolidaysCard holidays={upcomingHolidays} />
+        <BirthdaysThisMonthCard employees={birthdaysThisMonth} />
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Pending resignation requests</CardTitle>
-          <CardDescription>Awaiting HR decision</CardDescription>
+          <CardTitle>On leave this month</CardTitle>
+          <CardDescription>
+            {now.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" })}
+            {" · "}approved leave overlapping this month
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <ul className="flex flex-col gap-2">
-            {pendingResignations.map((r) => (
-              <ResignationRequestRow
-                key={r.id}
-                request={{
-                  id: r.id,
-                  employeeName: r.employee.fullName,
-                  resignationDate: fmt(r.resignationDate),
-                  noticePeriodDays: r.noticePeriodDays,
-                  reason: r.reason,
-                  status: r.status,
-                }}
-                showEmployeeName
-                canDecide
-              />
-            ))}
-            {pendingResignations.length === 0 && <EmptyRow>Nothing pending.</EmptyRow>}
-          </ul>
+        <CardContent className="px-0">
+          <div className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Leave type</TableHead>
+                  <TableHead>Dates</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {onLeaveThisMonth.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell>
+                      <span className="font-medium">{r.employee.fullName}</span>
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {r.employee.employeeCode}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{r.leaveType.name}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {r.startDate.getTime() === r.endDate.getTime()
+                        ? fmt(r.startDate)
+                        : `${fmt(r.startDate)} – ${fmt(r.endDate)}`}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {onLeaveThisMonth.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                      No one is on approved leave this month.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

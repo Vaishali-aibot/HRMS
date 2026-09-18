@@ -543,6 +543,23 @@ model AttendanceCorrectionRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Holidays. A simple org-wide calendar — every row is a non-working day for
+// everyone, shown on the dashboard to both employees and HR. No regional
+// variants (e.g. a state-specific holiday) — everyone sees the same list.
+// ---------------------------------------------------------------------------
+
+/// One row per holiday. `date` is UTC midnight of the calendar day, same
+/// convention as Employee.dateOfJoining.
+model Holiday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------------
 // Exit / Separation (PRD §24–§26). Two ways to start one: HR records a
 // resignation directly (initiateExit in src/lib/actions/exit.ts), or an
 // employee submits a ResignationRequest that a manager/HR approves
