@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ResignationRequestRow } from "@/components/resignation-request-row";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { HR_WRITE_ROLES } from "@/lib/rbac";
 import { NOT_EXITABLE_STATUSES } from "@/lib/exit-constants";
 
 import { ResignForm } from "./resign-form";
@@ -23,6 +24,7 @@ export default async function ExitPage() {
   }
 
   const isManager = session.user.role === "MANAGER";
+  const isHR = HR_WRITE_ROLES.includes(session.user.role);
 
   const employee = await prisma.employee.findUnique({
     where: { userId: session.user.id },
@@ -31,14 +33,24 @@ export default async function ExitPage() {
 
   // Needs the manager's own employee id, which isn't known until the query
   // above resolves — can't run this in parallel with it.
-  const teamRequests =
+  const [teamRequests, hrPendingRequests] = await Promise.all([
     isManager && employee
-      ? await prisma.resignationRequest.findMany({
+      ? prisma.resignationRequest.findMany({
           where: { status: "PENDING", employee: { reportingManagerId: employee.id } },
           orderBy: { createdAt: "asc" },
           include: { employee: true },
         })
-      : [];
+      : Promise.resolve([]),
+    // Org-wide — was previously the "Pending resignation requests" card on
+    // the main HR Dashboard, moved here to keep that dashboard focused.
+    isHR
+      ? prisma.resignationRequest.findMany({
+          where: { status: "PENDING" },
+          orderBy: { createdAt: "asc" },
+          include: { employee: true },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const canResign =
     employee &&
@@ -49,8 +61,9 @@ export default async function ExitPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Exit</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Submit and track your own resignation, and — if you manage people —
-          decide on your team&apos;s requests.
+          Submit and track your own resignation
+          {isManager && ", decide on your team's requests"}
+          {isHR && ", and decide on any pending resignation request org-wide"}.
         </p>
       </div>
 
@@ -124,6 +137,35 @@ export default async function ExitPage() {
                 />
               ))}
               {teamRequests.length === 0 && <EmptyRow>Nothing pending.</EmptyRow>}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {isHR && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending resignation requests</CardTitle>
+            <CardDescription>Awaiting HR decision · org-wide</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2">
+              {hrPendingRequests.map((r) => (
+                <ResignationRequestRow
+                  key={r.id}
+                  request={{
+                    id: r.id,
+                    employeeName: r.employee.fullName,
+                    resignationDate: fmt(r.resignationDate),
+                    noticePeriodDays: r.noticePeriodDays,
+                    reason: r.reason,
+                    status: r.status,
+                  }}
+                  showEmployeeName
+                  canDecide
+                />
+              ))}
+              {hrPendingRequests.length === 0 && <EmptyRow>Nothing pending.</EmptyRow>}
             </ul>
           </CardContent>
         </Card>

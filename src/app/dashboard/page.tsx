@@ -23,7 +23,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatCard } from "@/components/stat-card";
-import { ResignationRequestRow } from "@/components/resignation-request-row";
 import { UpcomingHolidaysCard } from "@/components/upcoming-holidays-card";
 import { BirthdaysThisMonthCard } from "@/components/birthdays-this-month-card";
 import { auth } from "@/lib/auth";
@@ -34,10 +33,6 @@ import { todayUTC } from "@/lib/date-only";
 
 function fmt(d: Date) {
   return d.toLocaleDateString(undefined, { timeZone: "UTC" });
-}
-
-function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <li className="text-sm text-muted-foreground">{children}</li>;
 }
 
 export default async function DashboardPage() {
@@ -146,7 +141,6 @@ export default async function DashboardPage() {
     onProbation,
     onNotice,
     pendingOnboarding,
-    pendingResignations,
     onLeaveThisMonth,
     employeesWithBirthday,
   ] = await Promise.all([
@@ -161,11 +155,6 @@ export default async function DashboardPage() {
     prisma.employee.count({ where: { status: "NOTICE_PERIOD" } }),
     prisma.employee.count({
       where: { status: { in: ["PRE_BOARDING", "ONBOARDING"] } },
-    }),
-    prisma.resignationRequest.findMany({
-      where: { status: "PENDING" },
-      orderBy: { createdAt: "asc" },
-      include: { employee: true },
     }),
     // Approved leave that overlaps this calendar month at all — not just
     // requests starting in it, so a leave spanning a month boundary still
@@ -222,34 +211,7 @@ export default async function DashboardPage() {
         <StatCard icon={ClipboardList} label="Pending onboarding" value={pendingOnboarding} />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pending resignation requests</CardTitle>
-            <CardDescription>Awaiting HR decision</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-2">
-              {pendingResignations.map((r) => (
-                <ResignationRequestRow
-                  key={r.id}
-                  request={{
-                    id: r.id,
-                    employeeName: r.employee.fullName,
-                    resignationDate: fmt(r.resignationDate),
-                    noticePeriodDays: r.noticePeriodDays,
-                    reason: r.reason,
-                    status: r.status,
-                  }}
-                  showEmployeeName
-                  canDecide
-                />
-              ))}
-              {pendingResignations.length === 0 && <EmptyRow>Nothing pending.</EmptyRow>}
-            </ul>
-          </CardContent>
-        </Card>
-
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <UpcomingHolidaysCard holidays={upcomingHolidays} />
         <BirthdaysThisMonthCard employees={birthdaysThisMonth} />
       </div>
