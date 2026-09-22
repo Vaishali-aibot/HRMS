@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -109,11 +110,16 @@ export function AppSidebar({
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-semibold">
-            HR
-          </div>
+          <Image
+            src="/logo-mark.png"
+            alt="dotkonnekt"
+            width={28}
+            height={28}
+            className="size-7 shrink-0 object-contain"
+            priority
+          />
           <span className="text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-            HRMS
+            <span className="text-primary">dot</span>konnekt
           </span>
         </div>
       </SidebarHeader>
