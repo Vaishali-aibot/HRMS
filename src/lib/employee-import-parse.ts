@@ -80,6 +80,25 @@ function cellDateOnly(cell: ExcelJS.CellValue): string | null {
       Date.UTC(cell.getUTCFullYear(), cell.getUTCMonth(), cell.getUTCDate())
     ).toISOString();
   }
+  // A date cell without a date number format applied (seen in the real
+  // data — exceljs then hands back the raw Excel serial number instead of
+  // a Date) — day 1 is 1900-01-01, with Excel's well-known day-60 leap-year
+  // bug baked into the epoch offset below, same as every spreadsheet tool
+  // reproduces it.
+  if (typeof cell === "number" && Number.isFinite(cell) && cell > 0) {
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    return new Date(excelEpoch + cell * 86400000).toISOString();
+  }
+  // A date typed as plain text (also seen in the real data) rather than a
+  // real date cell — DD-MM-YYYY only, since that's the format observed;
+  // anything else is left unparsed rather than guessed at.
+  if (typeof cell === "string") {
+    const match = cell.trim().match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (match) {
+      const [, day, month, year] = match;
+      return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).toISOString();
+    }
+  }
   return null;
 }
 

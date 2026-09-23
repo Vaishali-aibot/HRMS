@@ -101,6 +101,27 @@ describe("parseImportSheet", () => {
     expect(result.rows![0].dateOfJoining).toBe("2022-05-01T00:00:00.000Z");
   });
 
+  it("parses a date cell with no date number format applied (a raw Excel serial number)", () => {
+    // Seen in the real data: exceljs hands back a plain number, not a
+    // Date, for a cell that holds a date but was never formatted as one.
+    // 46127 == 2026-04-15 (verified against Excel's day-1900-01-01 epoch).
+    const wb = buildWorkbook([
+      [null, 1, "Someone", "someone@dotkonnekt.com", null, "Engineer", "Engineering", null, null, 46127],
+    ]);
+    const sheet = findImportSheet(wb)!;
+    const result = parseImportSheet(sheet, []);
+    expect(result.rows![0].dateOfJoining).toBe("2026-04-15T00:00:00.000Z");
+  });
+
+  it("parses a date typed as plain DD-MM-YYYY text", () => {
+    const wb = buildWorkbook([
+      [null, 1, "Someone", "someone@dotkonnekt.com", null, "Engineer", "Engineering", null, null, "15-04-2026"],
+    ]);
+    const sheet = findImportSheet(wb)!;
+    const result = parseImportSheet(sheet, []);
+    expect(result.rows![0].dateOfJoining).toBe("2026-04-15T00:00:00.000Z");
+  });
+
   it("flags a row missing a required field instead of silently dropping it", () => {
     const wb = buildWorkbook([
       [null, 1, "No Join Date", "x@dotkonnekt.com", null, "Engineer", "Engineering", null, null, null],
