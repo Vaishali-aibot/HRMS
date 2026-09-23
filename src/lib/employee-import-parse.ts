@@ -18,7 +18,13 @@ const HEADER_ALIASES = {
 } as const;
 
 type Field = keyof typeof HEADER_ALIASES;
-const REQUIRED_FIELDS: Field[] = ["fullName", "dateOfJoining", "department", "designation"];
+const REQUIRED_FIELDS: Field[] = [
+  "employeeIdRef",
+  "fullName",
+  "dateOfJoining",
+  "department",
+  "designation",
+];
 
 export type ParsedEmployeeRow = {
   // Stable key for this row within one preview/confirm round-trip — not
@@ -146,6 +152,12 @@ export function parseImportSheet(
     if (!dateOfJoining) errors.push("Missing or unparseable date of joining");
     if (!department) errors.push("Missing department");
     if (!designation) errors.push("Missing title/designation");
+    // Used directly as the new record's employeeCode (EMP-XXXX) — the
+    // spreadsheet's own numbering, not this app's counter — so it has to
+    // be a real positive integer.
+    if (!employeeIdRef || !/^\d+$/.test(employeeIdRef)) {
+      errors.push("Missing or non-numeric Employee ID");
+    }
 
     const match = fullName ? existingByName.get(fullName.trim().toLowerCase()) : undefined;
 
@@ -170,6 +182,19 @@ export function parseImportSheet(
 
   if (rows.length === 0) {
     return { error: `"${IMPORT_SHEET_NAME}" has no data rows.` };
+  }
+
+  // A duplicate Employee ID in the sheet would collide as employeeCode
+  // (unique) — flag every row it appears on rather than silently letting
+  // whichever one is processed first win.
+  const idCounts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.employeeIdRef) idCounts.set(row.employeeIdRef, (idCounts.get(row.employeeIdRef) ?? 0) + 1);
+  }
+  for (const row of rows) {
+    if (row.employeeIdRef && (idCounts.get(row.employeeIdRef) ?? 0) > 1) {
+      row.errors.push(`Employee ID ${row.employeeIdRef} appears more than once in the sheet`);
+    }
   }
 
   return { rows };

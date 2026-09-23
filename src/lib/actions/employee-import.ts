@@ -69,6 +69,7 @@ export async function previewImportEmployees(
 const rowDecisionSchema = z.object({
   key: z.string(),
   action: z.enum(["create", "update", "skip"]),
+  employeeIdRef: z.string().nullable(),
   fullName: z.string().nullable(),
   workEmail: z.string().nullable(),
   panNumber: z.string().nullable(),
@@ -182,11 +183,18 @@ export async function confirmImportEmployees(
       // action === "create" (or "update" with no match, which shouldn't
       // happen from the UI but falls back to create rather than silently
       // dropping the row)
-      if (!row.fullName || !row.dateOfJoining || !row.department || !row.designation) {
+      const idNum = row.employeeIdRef && /^\d+$/.test(row.employeeIdRef) ? row.employeeIdRef : null;
+      if (!row.fullName || !row.dateOfJoining || !row.department || !row.designation || !idNum) {
         skipped++;
         continue;
       }
       const employee = await createEmployeeRecord({
+        // The spreadsheet's own Employee ID, not this app's counter — see
+        // the "explicit employeeCode" doc on NewEmployeeInput. Not
+        // guaranteed unique against what's already in the database; a
+        // collision surfaces as a normal Prisma unique-constraint error,
+        // caught by the try/catch around this whole loop.
+        employeeCode: `EMP-${idNum.padStart(4, "0")}`,
         fullName: row.fullName,
         workEmail: row.workEmail ?? undefined,
         panNumber: row.panNumber ?? undefined,

@@ -24,6 +24,12 @@ export type NewEmployeeInput = {
   employmentType: EmploymentType;
   workMode: WorkMode;
   reportingManagerId?: string;
+  /** Explicit employeeCode to use instead of the auto-incrementing counter
+   * (e.g. a bulk import preserving the source spreadsheet's own
+   * numbering). When provided, the persistent counter is also bumped up
+   * to at least this value, so a later "Add employee" never collides
+   * with an imported code. */
+  employeeCode?: string;
   /** Defaults to PRE_BOARDING — the normal new-joiner path. */
   status?: EmploymentStatus;
   /** null = don't track probation at all (e.g. importing an employee who's
@@ -50,14 +56,31 @@ export type NewEmployeeInput = {
  */
 export async function createEmployeeRecord(data: NewEmployeeInput) {
   return prisma.$transaction(async (tx) => {
-    // Atomic counter increment (not count()+1) so two concurrent creates
-    // can never compute the same employeeCode.
-    const counter = await tx.counter.upsert({
-      where: { name: "employeeCode" },
-      update: { value: { increment: 1 } },
-      create: { name: "employeeCode", value: 1 },
-    });
-    const employeeCode = `EMP-${String(counter.value).padStart(4, "0")}`;
+    let employeeCode: string;
+    if (data.employeeCode) {
+      employeeCode = data.employeeCode;
+      // Keep the persistent counter in sync so a subsequent
+      // counter-generated code (the single "Add employee" form) never
+      // collides with an explicitly-numbered import.
+      const numericPart = Number(employeeCode.replace(/\D/g, ""));
+      if (Number.isFinite(numericPart) && numericPart > 0) {
+        const current = await tx.counter.findUnique({ where: { name: "employeeCode" } });
+        if (!current) {
+          await tx.counter.create({ data: { name: "employeeCode", value: numericPart } });
+        } else if (numericPart > current.value) {
+          await tx.counter.update({ where: { name: "employeeCode" }, data: { value: numericPart } });
+        }
+      }
+    } else {
+      // Atomic counter increment (not count()+1) so two concurrent creates
+      // can never compute the same employeeCode.
+      const counter = await tx.counter.upsert({
+        where: { name: "employeeCode" },
+        update: { value: { increment: 1 } },
+        create: { name: "employeeCode", value: 1 },
+      });
+      employeeCode = `EMP-${String(counter.value).padStart(4, "0")}`;
+    }
 
     const status = data.status ?? "PRE_BOARDING";
 

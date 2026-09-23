@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -51,17 +51,18 @@ export function ImportEmployeesForm() {
   const [rows, setRows] = useState<ParsedEmployeeRow[]>([]);
   const [actions, setActions] = useState<Record<string, RowAction>>({});
 
-  // Seed local editable state once a preview succeeds. previewState.rows is
-  // a fresh array identity on every successful submission, so this only
-  // re-runs when a new preview actually comes back.
-  useEffect(() => {
-    if (previewState.rows) {
-      setRows(previewState.rows);
-      setActions(
-        Object.fromEntries(previewState.rows.map((r) => [r.key, defaultActionFor(r)]))
-      );
-    }
-  }, [previewState.rows]);
+  // Seed local editable state once a preview succeeds — adjusted during
+  // render (React's documented pattern for "derive state from a prop that
+  // changed"), not in a useEffect, so this doesn't trigger an extra
+  // cascading render. previewState.rows gets a fresh array identity on
+  // every successful submission, so this only fires on an actual new
+  // preview, never on a re-render from e.g. editing a row's action below.
+  const [syncedRows, setSyncedRows] = useState<ParsedEmployeeRow[] | undefined>(undefined);
+  if (previewState.rows && previewState.rows !== syncedRows) {
+    setSyncedRows(previewState.rows);
+    setRows(previewState.rows);
+    setActions(Object.fromEntries(previewState.rows.map((r) => [r.key, defaultActionFor(r)])));
+  }
 
   const counts = useMemo(() => {
     const c = { create: 0, update: 0, skip: 0 };
@@ -75,6 +76,7 @@ export function ImportEmployeesForm() {
         rows.map((r) => ({
           key: r.key,
           action: actions[r.key] ?? "skip",
+          employeeIdRef: r.employeeIdRef,
           fullName: r.fullName,
           workEmail: r.workEmail,
           panNumber: r.panNumber,
@@ -132,6 +134,7 @@ export function ImportEmployeesForm() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Row</TableHead>
+                    <TableHead>Emp ID</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Title</TableHead>
@@ -145,6 +148,11 @@ export function ImportEmployeesForm() {
                   {rows.map((row) => (
                     <TableRow key={row.key}>
                       <TableCell className="text-muted-foreground">{row.rowNumber}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {row.employeeIdRef
+                          ? `EMP-${row.employeeIdRef.padStart(4, "0")}`
+                          : "—"}
+                      </TableCell>
                       <TableCell className="font-medium">{row.fullName ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {row.workEmail ?? "—"}

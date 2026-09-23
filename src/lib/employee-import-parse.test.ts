@@ -113,6 +113,32 @@ describe("parseImportSheet", () => {
     expect(result.rows![1].errors).toContain("Missing name");
   });
 
+  it("flags a row with a missing or non-numeric Employee ID — it becomes the employeeCode", () => {
+    const wb = buildWorkbook([
+      [null, null, "No ID", "a@dotkonnekt.com", null, "Engineer", "Engineering", null, null, new Date("2022-05-01")],
+      [null, "N/A", "Non-numeric ID", "b@dotkonnekt.com", null, "Engineer", "Engineering", null, null, new Date("2022-05-01")],
+      [null, 7, "Has A Valid ID", "c@dotkonnekt.com", null, "Engineer", "Engineering", null, null, new Date("2022-05-01")],
+    ]);
+    const sheet = findImportSheet(wb)!;
+    const result = parseImportSheet(sheet, []);
+    expect(result.rows![0].errors).toContain("Missing or non-numeric Employee ID");
+    expect(result.rows![1].errors).toContain("Missing or non-numeric Employee ID");
+    expect(result.rows![2].errors).not.toContain("Missing or non-numeric Employee ID");
+  });
+
+  it("flags every row sharing a duplicate Employee ID", () => {
+    const wb = buildWorkbook([
+      [null, 5, "First", "first@dotkonnekt.com", null, "Engineer", "Engineering", null, null, new Date("2022-05-01")],
+      [null, 5, "Second", "second@dotkonnekt.com", null, "Engineer", "Engineering", null, null, new Date("2022-05-01")],
+      [null, 6, "Third", "third@dotkonnekt.com", null, "Engineer", "Engineering", null, null, new Date("2022-05-01")],
+    ]);
+    const sheet = findImportSheet(wb)!;
+    const result = parseImportSheet(sheet, []);
+    expect(result.rows![0].errors.some((e) => e.includes("more than once"))).toBe(true);
+    expect(result.rows![1].errors.some((e) => e.includes("more than once"))).toBe(true);
+    expect(result.rows![2].errors.some((e) => e.includes("more than once"))).toBe(false);
+  });
+
   it("matches an existing employee by name, case-insensitively/trimmed", () => {
     const wb = buildWorkbook([
       [
