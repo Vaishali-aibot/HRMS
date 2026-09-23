@@ -7,8 +7,127 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { HR_WRITE_ROLES, requireRole } from "@/lib/rbac";
 import { DocumentType, ITTaskType } from "@/generated/prisma/enums";
+import type { EmploymentStatus, EmploymentType, WorkMode } from "@/generated/prisma/enums";
 import { DEFAULT_LEAVE_TYPES, ensureLeaveBalance } from "@/lib/leave-balance";
 import { addMonthsClamped } from "@/lib/date-only";
+
+export type NewEmployeeInput = {
+  fullName: string;
+  personalEmail?: string;
+  workEmail?: string;
+  panNumber?: string;
+  dateOfBirth?: Date;
+  dateOfJoining: Date;
+  department: string;
+  designation: string;
+  location?: string;
+  employmentType: EmploymentType;
+  workMode: WorkMode;
+  reportingManagerId?: string;
+  /** Defaults to PRE_BOARDING — the normal new-joiner path. */
+  status?: EmploymentStatus;
+  /** null = don't track probation at all (e.g. importing an employee who's
+   * long past it); undefined = compute the default 3-calendar-month date
+   * from dateOfJoining, same as the "Add employee" form's default. */
+  probationEndDate?: Date | null;
+  /** False skips seeding OnboardingDocument/ITOnboardingTask rows — for
+   * importing an already-ACTIVE employee, those checklists would just be
+   * permanently-pending noise (PRD's onboarding flow doesn't apply to them
+   * retroactively). Leave balances are always seeded regardless — every
+   * employee needs those whether they're new or already active. */
+  seedOnboarding?: boolean;
+  changedById?: string;
+  statusReason?: string;
+};
+
+/**
+ * The actual Employee-row-plus-everything-that-comes-with-it creation
+ * logic (employeeCode, status history, onboarding checklist seeding, leave
+ * balances) — shared by the single "Add employee" form action below and
+ * the bulk import action (src/lib/actions/employee-import.ts), so both
+ * produce a fully-seeded record the same way rather than the importer
+ * reimplementing (and risking drifting from) this.
+ */
+export async function createEmployeeRecord(data: NewEmployeeInput) {
+  return prisma.$transaction(async (tx) => {
+    // Atomic counter increment (not count()+1) so two concurrent creates
+    // can never compute the same employeeCode.
+    const counter = await tx.counter.upsert({
+      where: { name: "employeeCode" },
+      update: { value: { increment: 1 } },
+      create: { name: "employeeCode", value: 1 },
+    });
+    const employeeCode = `EMP-${String(counter.value).padStart(4, "0")}`;
+
+    const status = data.status ?? "PRE_BOARDING";
+
+    const employee = await tx.employee.create({
+      data: {
+        employeeCode,
+        fullName: data.fullName,
+        personalEmail: data.personalEmail || undefined,
+        workEmail: data.workEmail || undefined,
+        panNumber: data.panNumber || undefined,
+        dateOfBirth: data.dateOfBirth,
+        dateOfJoining: data.dateOfJoining,
+        probationEndDate: data.probationEndDate ?? undefined,
+        department: data.department,
+        designation: data.designation,
+        location: data.location || undefined,
+        employmentType: data.employmentType,
+        workMode: data.workMode,
+        reportingManagerId: data.reportingManagerId || undefined,
+        status,
+      },
+    });
+
+    // Same transaction as the employee insert — never leave an Employee
+    // row with no corresponding lifecycle-history row.
+    await tx.employeeStatusHistory.create({
+      data: {
+        employeeId: employee.id,
+        previousStatus: null,
+        newStatus: status,
+        reason: data.statusReason ?? "Employee record created",
+        changedById: data.changedById,
+      },
+    });
+
+    if (data.seedOnboarding !== false) {
+      // Onboarding starts automatically the moment the record exists (PRD
+      // §10/§11): one checklist row per document/IT task type, all
+      // NOT_SUBMITTED/PENDING until HR or IT updates them.
+      await tx.onboardingDocument.createMany({
+        data: Object.values(DocumentType).map((type) => ({
+          employeeId: employee.id,
+          type,
+        })),
+      });
+      await tx.iTOnboardingTask.createMany({
+        data: Object.values(ITTaskType).map((type) => ({
+          employeeId: employee.id,
+          type,
+        })),
+      });
+    }
+
+    // Leave entitlement, same idea (PRD §14): give the employee a balance
+    // for every active leave type for the current year. Monthly-capped
+    // types (WFH) never get a LeaveBalance row — there's no annual pool to
+    // seed; "remaining" is computed fresh from approved requests instead
+    // (see getMonthlyCapRemaining).
+    await tx.leaveType.createMany({ data: DEFAULT_LEAVE_TYPES, skipDuplicates: true });
+    const leaveTypes = await tx.leaveType.findMany({
+      where: { isActive: true, monthlyCap: null },
+    });
+    const currentYear = new Date().getFullYear();
+    for (const leaveType of leaveTypes) {
+      await ensureLeaveBalance(tx, employee.id, leaveType, currentYear);
+    }
+
+    return employee;
+  });
+}
 
 const createEmployeeSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
@@ -104,74 +223,18 @@ export async function createEmployee(
       }
     }
 
-    await prisma.$transaction(async (tx) => {
-      // Atomic counter increment (not count()+1) so two concurrent creates
-      // can never compute the same employeeCode.
-      const counter = await tx.counter.upsert({
-        where: { name: "employeeCode" },
-        update: { value: { increment: 1 } },
-        create: { name: "employeeCode", value: 1 },
-      });
-      const employeeCode = `EMP-${String(counter.value).padStart(4, "0")}`;
-
-      const employee = await tx.employee.create({
-        data: {
-          employeeCode,
-          fullName: data.fullName,
-          personalEmail: data.personalEmail || undefined,
-          dateOfJoining,
-          probationEndDate,
-          department: data.department,
-          designation: data.designation,
-          location: data.location || undefined,
-          employmentType: data.employmentType,
-          workMode: data.workMode,
-          reportingManagerId,
-          status: "PRE_BOARDING",
-        },
-      });
-
-      // Same transaction as the employee insert — never leave an Employee
-      // row with no corresponding lifecycle-history row.
-      await tx.employeeStatusHistory.create({
-        data: {
-          employeeId: employee.id,
-          previousStatus: null,
-          newStatus: "PRE_BOARDING",
-          reason: "Employee record created",
-          changedById: session.user.id,
-        },
-      });
-
-      // Onboarding starts automatically the moment the record exists (PRD
-      // §10/§11): one checklist row per document/IT task type, all
-      // NOT_SUBMITTED/PENDING until HR or IT updates them.
-      await tx.onboardingDocument.createMany({
-        data: Object.values(DocumentType).map((type) => ({
-          employeeId: employee.id,
-          type,
-        })),
-      });
-      await tx.iTOnboardingTask.createMany({
-        data: Object.values(ITTaskType).map((type) => ({
-          employeeId: employee.id,
-          type,
-        })),
-      });
-
-      // Leave entitlement, same idea (PRD §14): give the new employee a
-      // balance for every active leave type for the current year. Monthly-
-      // capped types (WFH) never get a LeaveBalance row — there's no
-      // annual pool to seed; "remaining" is computed fresh from approved
-      // requests instead (see getMonthlyCapRemaining).
-      await tx.leaveType.createMany({ data: DEFAULT_LEAVE_TYPES, skipDuplicates: true });
-      const leaveTypes = await tx.leaveType.findMany({
-        where: { isActive: true, monthlyCap: null },
-      });
-      const currentYear = new Date().getFullYear();
-      for (const leaveType of leaveTypes) {
-        await ensureLeaveBalance(tx, employee.id, leaveType, currentYear);
-      }
+    await createEmployeeRecord({
+      fullName: data.fullName,
+      personalEmail: data.personalEmail,
+      dateOfJoining,
+      probationEndDate,
+      department: data.department,
+      designation: data.designation,
+      location: data.location,
+      employmentType: data.employmentType,
+      workMode: data.workMode,
+      reportingManagerId,
+      changedById: session.user.id,
     });
   } catch (err) {
     console.error("createEmployee failed:", err);

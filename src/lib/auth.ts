@@ -37,6 +37,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/sign-in",
   },
   callbacks: {
+    async signIn({ user }) {
+      // Auto-link: if this account isn't yet tied to an Employee record,
+      // try matching by work email — turns "HR manually links every
+      // account via /dashboard/users" into "it just works on first
+      // sign-in" for anyone whose Employee.workEmail was set (e.g. via a
+      // bulk import). updateMany's compound where (workEmail match AND
+      // still unlinked) makes this safe under concurrent sign-ins without
+      // a separate read-then-write — whichever request's UPDATE commits
+      // first wins, the other's WHERE just stops matching. A failure here
+      // should never block sign-in itself.
+      if (user?.id && user.email) {
+        try {
+          await prisma.employee.updateMany({
+            where: { workEmail: user.email, userId: null },
+            data: { userId: user.id },
+          });
+        } catch (err) {
+          console.error("Auto-link employee by workEmail failed:", err);
+        }
+      }
+      return true;
+    },
     async session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;

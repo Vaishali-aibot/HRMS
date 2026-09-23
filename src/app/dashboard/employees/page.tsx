@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,11 +14,19 @@ import { StatusBadge } from "@/components/status-badge";
 import { prisma } from "@/lib/prisma";
 import { HR_VIEW_ROLES, requireRoleForPage } from "@/lib/rbac";
 
-export default async function EmployeesPage() {
+export default async function EmployeesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ imported?: string; updated?: string; skipped?: string }>;
+}) {
   // Full roster is HR/management-only (PRD §30) — redirects non-HR roles
   // rather than letting them view every employee's status/department/join
   // date, which the proxy alone does not prevent.
   await requireRoleForPage(...HR_VIEW_ROLES);
+
+  const { imported, updated, skipped } = await searchParams;
+  const importSummary =
+    imported != null ? { imported: Number(imported), updated: Number(updated), skipped: Number(skipped) } : null;
 
   const employees = await prisma.employee.findMany({
     orderBy: { createdAt: "desc" },
@@ -42,11 +50,28 @@ export default async function EmployeesPage() {
             {employees.length} {employees.length === 1 ? "employee" : "employees"}
           </p>
         </div>
-        <Button nativeButton={false} render={<Link href="/dashboard/employees/new" />}>
-          <Plus />
-          Add employee
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/dashboard/employees/import" />}
+          >
+            <Upload />
+            Import
+          </Button>
+          <Button nativeButton={false} render={<Link href="/dashboard/employees/new" />}>
+            <Plus />
+            Add employee
+          </Button>
+        </div>
       </div>
+
+      {importSummary && (
+        <p className="rounded-lg border border-border bg-secondary px-4 py-2 text-sm text-secondary-foreground">
+          Import complete: {importSummary.imported} created, {importSummary.updated} updated,{" "}
+          {importSummary.skipped} skipped.
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
         <Table>

@@ -114,7 +114,17 @@ model Employee {
   id           String @id @default(cuid())
   employeeCode String @unique // human-readable Employee ID, e.g. EMP-0001
 
-  // Optional link to a login identity — set once the person signs in via SSO.
+  /// The person's real work/sign-in address (e.g. name@dotkonnekt.com) —
+  /// distinct from personalEmail below. Set on creation (manually, or via a
+  /// bulk import) so a first-time SSO sign-in can auto-link userId below by
+  /// matching against this, instead of requiring HR to link every account
+  /// by hand via /dashboard/users (see the signIn callback in
+  /// src/lib/auth.ts). Optional — older records predate this field and
+  /// still need manual linking.
+  workEmail String? @unique
+
+  // Optional link to a login identity — set once the person signs in via SSO
+  // (auto-linked via workEmail above, or manually via /dashboard/users).
   userId String? @unique
   user   User?   @relation(fields: [userId], references: [id])
 
