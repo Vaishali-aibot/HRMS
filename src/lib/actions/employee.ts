@@ -36,12 +36,19 @@ export type NewEmployeeInput = {
    * long past it); undefined = compute the default 3-calendar-month date
    * from dateOfJoining, same as the "Add employee" form's default. */
   probationEndDate?: Date | null;
-  /** False skips seeding OnboardingDocument/ITOnboardingTask rows — for
-   * importing an already-ACTIVE employee, those checklists would just be
-   * permanently-pending noise (PRD's onboarding flow doesn't apply to them
-   * retroactively). Leave balances are always seeded regardless — every
-   * employee needs those whether they're new or already active. */
-  seedOnboarding?: boolean;
+  /** False skips seeding ITOnboardingTask rows — for importing an
+   * already-ACTIVE employee, that checklist (laptop allocation, email
+   * creation, etc.) would just be permanently-pending noise (PRD's
+   * onboarding flow doesn't apply to them retroactively). Leave balances
+   * are always seeded regardless — every employee needs those whether
+   * they're new or already active. */
+  seedITTasks?: boolean;
+  /** False skips seeding OnboardingDocument rows. Defaults to true even
+   * for an already-active import (unlike seedITTasks above) — the
+   * Documents page has no upload path other than these rows, so without
+   * them an employee has no way to submit PAN/Aadhaar/bank proof/etc. at
+   * all, active or not. */
+  seedDocuments?: boolean;
   changedById?: string;
   statusReason?: string;
 };
@@ -116,16 +123,20 @@ export async function createEmployeeRecord(data: NewEmployeeInput) {
       },
     });
 
-    if (data.seedOnboarding !== false) {
-      // Onboarding starts automatically the moment the record exists (PRD
-      // §10/§11): one checklist row per document/IT task type, all
-      // NOT_SUBMITTED/PENDING until HR or IT updates them.
+    // Onboarding starts automatically the moment the record exists (PRD
+    // §10/§11): one checklist row per document/IT task type, all
+    // NOT_SUBMITTED/PENDING until HR or IT updates them. Document rows are
+    // seeded independently of IT tasks — see the seedDocuments doc on
+    // NewEmployeeInput for why an already-active import still needs them.
+    if (data.seedDocuments !== false) {
       await tx.onboardingDocument.createMany({
         data: Object.values(DocumentType).map((type) => ({
           employeeId: employee.id,
           type,
         })),
       });
+    }
+    if (data.seedITTasks !== false) {
       await tx.iTOnboardingTask.createMany({
         data: Object.values(ITTaskType).map((type) => ({
           employeeId: employee.id,

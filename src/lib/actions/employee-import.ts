@@ -206,7 +206,10 @@ export async function confirmImportEmployees(
         workMode: "ON_SITE",
         status: "ACTIVE",
         probationEndDate: null, // already-active import, not a new joiner
-        seedOnboarding: false, // not actually onboarding — see NewEmployeeInput doc
+        seedITTasks: false, // not actually onboarding — see NewEmployeeInput doc
+        // seedDocuments defaults to true — an already-active import still
+        // needs a way to submit PAN/Aadhaar/bank proof via the Documents
+        // page, which has no upload path other than these rows.
         changedById: session.user.id,
         statusReason: "Bulk import",
       });
