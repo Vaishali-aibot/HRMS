@@ -109,25 +109,15 @@ export async function updateLeaveType(
   const isActive = formData.get("isActive") !== null;
 
   try {
-    // A type flagged marksAttendanceAsWFH (currently just WFH) is only
-    // ever capped per-month, never from an annual pool (see the schema
-    // comment on LeaveType.monthlyCap) — decideLeaveRequest routes it
-    // through the monthlyCap branch specifically because that flag is
-    // set. Blanking the Monthly cap field on this row would silently flip
-    // it onto the annual-pool branch instead, where its annualDays is 0,
-    // breaking every WFH approval org-wide until someone notices. Refuse
-    // the save rather than let that happen quietly.
-    const existing = await prisma.leaveType.findUnique({
-      where: { id: parsed.data.leaveTypeId },
-      select: { marksAttendanceAsWFH: true },
-    });
-    if (existing?.marksAttendanceAsWFH && parsed.data.monthlyCap == null) {
-      return {
-        error:
-          "This type marks attendance as WFH on approval and must keep a monthly cap set. Deactivate it instead of clearing the cap.",
-      };
-    }
-
+    // marksAttendanceAsWFH (currently just WFH) only ever gates attendance
+    // marking and eligibility/yearly-cap checks (checkWFHEligibility,
+    // decideLeaveRequest) — it's independent of monthlyCap, which is only
+    // "which balance-checking branch to use" (see getRemainingForLeaveType
+    // in src/lib/leave-balance.ts). So switching a marksAttendanceAsWFH row
+    // between monthlyCap and an accrual-based annual pool (as the
+    // 20260924_wfh_monthly_accrual migration did, for WFH's own
+    // month-to-month carry-forward) is safe — nothing here needs a guard
+    // against it.
     await prisma.leaveType.update({
       where: { id: parsed.data.leaveTypeId },
       data: {

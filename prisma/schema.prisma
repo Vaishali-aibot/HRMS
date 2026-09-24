@@ -381,21 +381,26 @@ model LeaveType {
   carryForwardLimit    Float              @default(0)
   accrualMethod        LeaveAccrualMethod @default(ANNUAL)
   /// If set, this type is capped per calendar month instead of drawing from
-  /// an annual pool (used for WFH: 2/month, not a growing yearly balance).
-  /// When set, `annualDays`/`accrualMethod`/`carryForwardLimit` are ignored
-  /// and no LeaveBalance row is ever created for this type — "remaining" is
+  /// an annual pool, with no persisted balance at all — "remaining" is
   /// computed on the fly from approved LeaveRequests in the target month
-  /// (see getMonthlyCapRemaining in src/lib/leave-balance.ts). Editable on
-  /// the leave-type admin form — but updateLeaveType (src/lib/actions/
-  /// leave-type.ts) refuses to null this out for a `marksAttendanceAsWFH`
-  /// row, since that would silently reroute its approvals onto the
-  /// annual-pool branch instead (where its annualDays is 0).
+  /// (see getMonthlyCapRemaining in src/lib/leave-balance.ts) and resets to
+  /// the full cap every month, with no carry-forward. WFH used this until
+  /// the 20260924_wfh_monthly_accrual migration moved it onto the regular
+  /// MONTHLY-accrual/LeaveBalance path instead (annualDays 24 = 2/month),
+  /// specifically so unused WFH days carry forward month to month within
+  /// the year — something a monthlyCap type structurally cannot do. Kept
+  /// as a real option for any *other* type that genuinely wants a
+  /// hard-reset monthly cap instead of carry-forward.
   monthlyCap           Float?
   /// True for exactly one type (WFH) — approving a request of this type
   /// also writes WORK_FROM_HOME onto the employee's attendance record for
-  /// every covered date (see decideLeaveRequest). Not exposed on the
-  /// add/edit leave-type admin form — only meaningful for one seeded type,
-  /// so it's set via migration rather than inviting HR to create more.
+  /// every covered date (see decideLeaveRequest). Independent of
+  /// monthlyCap above (that only picks which balance-checking branch
+  /// applies) — this is what actually triggers the attendance-marking
+  /// behavior, regardless of which branch the type uses. Not exposed on
+  /// the add/edit leave-type admin form — only meaningful for one seeded
+  /// type, so it's set via migration rather than inviting HR to create
+  /// more.
   marksAttendanceAsWFH Boolean            @default(false)
   isActive             Boolean            @default(true)
   createdAt            DateTime           @default(now())

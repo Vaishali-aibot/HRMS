@@ -16,9 +16,16 @@ import type { Prisma } from "@/generated/prisma/client";
 export const DEFAULT_LEAVE_TYPES = [
   { name: "Sick Leave", annualDays: 5, accrualMethod: "QUARTERLY" as const },
   { name: "Earned Leave", annualDays: 10, accrualMethod: "QUARTERLY" as const },
-  // WFH: monthlyCap replaces the annual pool entirely — annualDays is unused
-  // for this type (see the schema comment on LeaveType.monthlyCap).
-  { name: "WFH", annualDays: 0, monthlyCap: 2, marksAttendanceAsWFH: true },
+  // WFH: 2/month via MONTHLY accrual (annualDays 24 = 2 * 12), same
+  // LeaveBalance-backed mechanism every other type uses — so unused days
+  // carry forward month to month within the year (allocated only ratchets
+  // up, used only grows when spent), unlike a monthlyCap type which has no
+  // persisted balance at all and resets to a fresh 2 every month. Resets
+  // each January (carryForwardLimit 0 — no cross-year carry).
+  // marksAttendanceAsWFH is independent of this — it's what actually
+  // triggers the "write a WFH attendance record on approval" behavior;
+  // see decideLeaveRequest in src/lib/actions/leave.ts.
+  { name: "WFH", annualDays: 24, accrualMethod: "MONTHLY" as const, marksAttendanceAsWFH: true },
 ];
 
 /**
