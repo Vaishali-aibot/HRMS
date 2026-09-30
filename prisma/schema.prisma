@@ -176,6 +176,7 @@ model Employee {
   exitChecklistItems           ExitChecklistItem[]
   resignationRequests          ResignationRequest[]
   assignedAssets               Asset[]
+  selfReportedAssets           EmployeeAsset[]
   hrRequests                   HRRequest[]
   goals                        Goal[]
   performanceReviews           PerformanceReview[]
@@ -718,6 +719,47 @@ model AssetHistory {
   occurredAt    DateTime           @default(now())
 
   @@index([assetId])
+}
+
+enum EmployeeAssetCategory {
+  LAPTOP
+  CHARGER
+  MONITOR
+  OTHER
+}
+
+/// Employee self-service equipment log — distinct from the HR-managed
+/// Asset/AssetHistory registry above (that one is HR assigning/tracking a
+/// physical asset's lifecycle; this one is the employee themselves
+/// recording the specs of the gear they have, e.g. for insurance/audit
+/// purposes). HR can see these read-only from /dashboard/assets. One row
+/// per item — an employee with two monitors adds two rows. Every field
+/// beyond category is nullable since which ones apply depends on it: a
+/// laptop uses brand/model/serialNumber/processor/ram/operatingSystem, a
+/// charger only serialNumber, a monitor serialNumber/assetTag, and "other"
+/// falls back to otherDescription/serialNumber/notes.
+model EmployeeAsset {
+  id         String                @id @default(cuid())
+  employeeId String
+  employee   Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  category   EmployeeAssetCategory
+
+  brand           String?
+  model           String?
+  serialNumber    String?
+  processor       String?
+  ram             String?
+  operatingSystem String?
+  assetTag        String?
+
+  /// Free-text name for category OTHER (e.g. "Keyboard", "Headset").
+  otherDescription String?
+  notes            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
 }
 
 // ---------------------------------------------------------------------------

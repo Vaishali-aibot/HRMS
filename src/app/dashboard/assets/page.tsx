@@ -11,6 +11,7 @@ import { HR_WRITE_ROLES, requireRoleForPage } from "@/lib/rbac";
 
 import { AddAssetForm } from "./add-asset-form";
 import { AssetRow } from "./asset-row";
+import { EmployeeReportedAssetsTable } from "./employee-reported-assets-table";
 
 function fmt(d: Date) {
   return d.toLocaleDateString(undefined, { timeZone: "UTC" });
@@ -19,7 +20,7 @@ function fmt(d: Date) {
 export default async function AssetsPage() {
   await requireRoleForPage(...HR_WRITE_ROLES);
 
-  const [assets, employees] = await Promise.all([
+  const [assets, employees, employeeReportedAssets] = await Promise.all([
     prisma.asset.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -30,6 +31,13 @@ export default async function AssetsPage() {
     prisma.employee.findMany({
       orderBy: { fullName: "asc" },
       select: { id: true, employeeCode: true, fullName: true },
+    }),
+    // Self-reported (EmployeeAsset), not the HR-managed Asset registry above —
+    // employees log these themselves at /dashboard/my-assets; HR only views
+    // them here.
+    prisma.employeeAsset.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { employee: { select: { employeeCode: true, fullName: true } } },
     }),
   ]);
   const employeeNameById = new Map(employees.map((e) => [e.id, `${e.employeeCode} — ${e.fullName}`]));
@@ -92,6 +100,16 @@ export default async function AssetsPage() {
         <h2 className="text-sm font-semibold text-muted-foreground">Add an asset</h2>
         <div className="mt-2">
           <AddAssetForm />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground">Employee-reported assets</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Equipment employees have logged themselves at My Assets — view only.
+        </p>
+        <div className="mt-2 overflow-hidden rounded-xl ring-1 ring-foreground/10">
+          <EmployeeReportedAssetsTable assets={employeeReportedAssets} />
         </div>
       </div>
     </div>
